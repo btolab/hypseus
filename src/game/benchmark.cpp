@@ -1,5 +1,5 @@
 /*
- * benchmark.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -30,7 +30,8 @@
 #include "config.h"
 
 #include <string.h>
-#include "../daphne.h" // for get_quitflag/set_quitflag
+#include <plog/Log.h>
+#include "../hypseus.h" // for get_quitflag/set_quitflag
 #include "../io/conout.h"
 #include "../ldp-out/ldp.h"
 #include "benchmark.h"
@@ -59,7 +60,7 @@ void benchmark::start()
         // draw overlay on all surfaces
         for (int i = 0; i < m_video_overlay_count; i++) {
             m_video_overlay_needs_update = true;
-            video_blit();
+            blit();
         }
     }
 
@@ -83,7 +84,7 @@ void benchmark::set_preset(int val)
         m_video_overlay_needs_update = true; // we only need to update it once
         break;
     default:
-        printline("Unknown preset!");
+        LOGD << "Unknown preset!";
         break;
     }
 }
@@ -92,10 +93,10 @@ void benchmark::palette_calculate()
 {
     SDL_Color color;
     color.r = color.b = color.g = 255; // white
-    palette_set_color(255, color);     // set it
+    palette::set_color(255, color);     // set it
 }
 
-void benchmark::video_repaint()
+void benchmark::repaint()
 {
     Uint32 cur_w = g_ldp->get_discvideo_width() >> 1; // width overlay should be
     Uint32 cur_h = g_ldp->get_discvideo_height() >> 1; // height overlay should
@@ -108,16 +109,16 @@ void benchmark::video_repaint()
         if (g_ldp->lock_overlay(1000)) {
             m_video_overlay_width  = cur_w;
             m_video_overlay_height = cur_h;
-            video_shutdown();
-            if (!video_init()) {
-                printline(
-                    "Fatal Error, trying to re-create the surface failed!");
+            shutdown_video();
+            if (!init_video()) {
+                LOGW <<
+                    "Fatal Error, trying to re-create the surface failed!";
                 set_quitflag();
             }
             g_ldp->unlock_overlay(1000); // unblock game video overlay
         } else {
-            printline("SEEKTEST ERROR : Timed out trying to get a lock on the "
-                      "yuv overlay");
+            LOGW << "SEEKTEST : Timed out trying to get a lock on the "
+                      "yuv overlay";
         }
     } // end if dimensions are incorrect
 

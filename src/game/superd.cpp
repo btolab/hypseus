@@ -1,5 +1,5 @@
 /*
- * superd.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001-2005 Mark Broadhead
  *
@@ -137,10 +137,10 @@ int superd_irq_callback(int irqline)
 // superdon constructor
 superd::superd()
 {
-    struct cpudef cpu;
+    struct cpu::def cpu;
 
     m_shortgamename = "sdq";
-    memset(&cpu, 0, sizeof(struct cpudef));
+    memset(&cpu, 0, sizeof(struct cpu::def));
     memset(banks, 0xFF, 4); // fill banks with 0xFF's
     m_video_overlay[m_active_video_overlay] = NULL;
 
@@ -151,7 +151,7 @@ superd::superd()
     m_video_overlay_height = SUPERD_OVERLAY_H;
     m_palette_color_count  = SUPERD_COLOR_COUNT;
 
-    cpu.type          = CPU_Z80;
+    cpu.type          = cpu::type::Z80;
     cpu.hz            = SUPERD_CPU_HZ;
     cpu.irq_period[0] = SUPERD_IRQ_PERIOD; // the IRQ is connected to the
                                            // LD-V1000 command strobe
@@ -159,14 +159,14 @@ superd::superd()
     cpu.must_copy_context = false;
     cpu.nmi_period        = 0.0;
     cpu.mem = m_cpumem;
-    add_cpu(&cpu); // add this cpu to the list
+    cpu::add(&cpu); // add this cpu to the list
 
-    struct sounddef soundchip;
+    struct sound::chip soundchip;
 
-    soundchip.type = SOUNDCHIP_SN76496; // Super Don uses the SN76496 sound chip
+    soundchip.type = sound::CHIP_SN76496; // Super Don uses the SN76496 sound chip
     soundchip.hz   = SUPERD_CPU_HZ / 2; // the SN76496 uses half the rate that the
                                         // cpu uses on Super Don
-    m_soundchip_id = add_soundchip(&soundchip);
+    m_soundchip_id = sound::add_chip(&soundchip);
 
 #ifdef CPU_DEBUG
     addr_names = superd_addr_names;
@@ -179,7 +179,7 @@ superd::superd()
     z80_set_irq_callback(superd_irq_callback);
 #endif
 
-    ldv1000_enable_instant_seeking(); // enable instantaneous seeks because we
+    ldv1000::enable_instant_seeking(); // enable instantaneous seeks because we
                                       // can
 
     // no more issues! :)
@@ -247,7 +247,7 @@ sdqshortalt::sdqshortalt()
 
 bool superd::init()
 {
-    cpu_init();
+    cpu::init();
     //	g_ldp->set_skip_blanking(true);	// set blanking for skips
     // this is a hack since the real arcade controls this blanking with the
     // video overlay
@@ -267,9 +267,9 @@ void superd::do_irq(unsigned int which_irq)
         // NOTE: IRQ stuff moved to OnVblank routine
         /*
         // Redraws the screen (if needed) on interrupt
-        video_blit();
-        ldp_input_latch = read_ldv1000();
-        write_ldv1000(ldp_output_latch);
+        blit();
+        ldp_input_latch = ldv1000::read();
+        ldv1000::write(ldp_output_latch);
         Z80_ASSERT_IRQ;
         */
     } else {
@@ -311,7 +311,7 @@ void superd::port_write(Uint16 Port, Uint8 Value)
     case 0x04:
         if (!m_prefer_samples) {
             // Send data to sound chip
-            audio_writedata(m_soundchip_id, Value);
+            sound::writedata(m_soundchip_id, Value);
         }
 
         else {
@@ -330,7 +330,7 @@ void superd::port_write(Uint16 Port, Uint8 Value)
             // sound.
             if (Value == 0x08) {
                 if (snd_coin_count == 0) {
-                    sound_play(S_SD_COIN);
+                    sound::play(S_SD_COIN);
                 }
 
                 snd_coin_count++;
@@ -340,7 +340,7 @@ void superd::port_write(Uint16 Port, Uint8 Value)
             }
             if (Value == 0x11) {
                 if (snd_succeed_count == 0) {
-                    sound_play(S_SD_SUCCEED);
+                    sound::play(S_SD_SUCCEED);
                 }
 
                 snd_succeed_count++;
@@ -350,7 +350,7 @@ void superd::port_write(Uint16 Port, Uint8 Value)
             }
             if (Value == 0xc1) {
                 printline("Playing fail sound");
-                sound_play(S_SD_FAIL);
+                sound::play(S_SD_FAIL);
             }
 
             // alternate sounds for alternate ROM set (same counter should be
@@ -359,7 +359,7 @@ void superd::port_write(Uint16 Port, Uint8 Value)
             // is quick
             if (Value == 0x12) {
                 if (snd_succeed_count == 0) {
-                    sound_play(S_SDA_SUCCESS_LO);
+                    sound::play(S_SDA_SUCCESS_LO);
                 }
 
                 snd_succeed_count++;
@@ -370,7 +370,7 @@ void superd::port_write(Uint16 Port, Uint8 Value)
 
             if (Value == 0x0F) {
                 if (snd_succeed_count == 0) {
-                    sound_play(S_SDA_SUCCESS_HI);
+                    sound::play(S_SDA_SUCCESS_HI);
                 }
 
                 snd_succeed_count++;
@@ -390,11 +390,11 @@ void superd::port_write(Uint16 Port, Uint8 Value)
         }
         // bit 7 controls whether LD video is displayed
         if ((Value >> 7) & 0x01) {
-            //			palette_set_transparency(SUPERDON_TRANSPARENT_COLOR,
+            //			palette::set_transparency(SUPERDON_TRANSPARENT_COLOR,
             //true);
         } else {
             // NOTE : this gets blanked _after_ a skip command is issued
-            //			palette_set_transparency(SUPERDON_TRANSPARENT_COLOR,
+            //			palette::set_transparency(SUPERDON_TRANSPARENT_COLOR,
             //false);
         }
         break;
@@ -498,15 +498,15 @@ void superd::palette_calculate()
         bit1         = static_cast<Uint8>((color_prom[i] >> 0) & 0x01);
         bit2         = static_cast<Uint8>((color_prom[i] >> 1) & 0x01);
         temp_color.b = static_cast<Uint8>((0x24 * bit0) + (0x4a * bit1) + (0x91 * bit2));
-        palette_set_color(i, temp_color);
+        palette::set_color(i, temp_color);
     }
 
-    palette_set_transparency(0, false); // color 0 is yellow, and is not
+    palette::set_transparency(0, false); // color 0 is yellow, and is not
                                         // transparent
-    palette_set_transparency(SUPERDON_TRANSPARENT_COLOR, true);
+    palette::set_transparency(SUPERDON_TRANSPARENT_COLOR, true);
 }
 
-void superd::video_repaint()
+void superd::repaint()
 {
     for (int charx = 0; charx < 32; charx++) {
         for (int chary = 0; chary < 32; chary++) {
@@ -617,10 +617,10 @@ void superd::input_disable(Uint8 move)
 
 void superd::OnVblank()
 {
-    ldv1000_report_vsync();
+    ldv1000::report_vsync();
 
     // Redraws the screen (if needed)
-    video_blit();
+    blit();
 }
 
 void superd::OnLDV1000LineChange(bool bIsStatus, bool bIsEnabled)
@@ -629,12 +629,12 @@ void superd::OnLDV1000LineChange(bool bIsStatus, bool bIsEnabled)
         // if the status strobe has become enabled, then read command from
         // ldv1000 into latch
         if (bIsStatus) {
-            ldp_input_latch = read_ldv1000();
+            ldp_input_latch = ldv1000::read();
         }
         // else the command strobe has become enabled, so send command to
         // ldv1000 and do an IRQ
         else {
-            write_ldv1000(ldp_output_latch);
+            ldv1000::write(ldp_output_latch);
             Z80_ASSERT_IRQ;
         }
     }

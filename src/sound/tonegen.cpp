@@ -1,5 +1,5 @@
 /*
-* tonegen.cpp
+* ____ DAPHNE COPYRIGHT NOTICE ____
 *
 * Copyright (C) 2005 Mark Broadhead
 *
@@ -28,18 +28,22 @@
 
 #include "sound.h"
 #include "tonegen.h"
-#include "../io/conout.h"
 #include <memory.h>
+#include <plog/Log.h>
+
+namespace tonegen
+{
+
 tonegen g_tonegen;
 bool g_tonegen_init = false;
 
-int tonegen_initialize(Uint32 unused)
+int initialize(Uint32 unused)
 {
     int result = -1;
     if (!g_tonegen_init) {
         result = 0;
     } else {
-        printline("TONEGEN: Error! You can only initialize one 'chip'!");
+        LOGE << "You can only initialize one 'chip'!";
     }
     int channel;
     for (channel = 0; channel < VOICES; channel++) {
@@ -52,20 +56,20 @@ int tonegen_initialize(Uint32 unused)
     return result;
 }
 
-void tonegen_writedata(Uint32 channel, Uint32 frequency, int index)
+void writedata(Uint32 channel, Uint32 frequency, int index)
 {
     g_tonegen.bytes_per_switch[channel] =
-        frequency ? (int)((AUDIO_FREQ / frequency * 4 / 2) + .5) : 0;
+        frequency ? (int)((sound::FREQ / frequency * 4 / 2) + .5) : 0;
 }
 
-void tonegen_stream(Uint8* stream, int length, int index)
+void stream(Uint8* stream, int length, int index)
 {
     for (int pos = 0; pos < length; pos += 4) {
         // endian-independent! :)
         // NOTE : assumes stream is in little endian format
         Sint16 sample_left  = 0;
         Sint16 sample_right = 0;
-        int channel = 0;
+        int channel         = 0;
         for (channel = 0; channel < VOICES; channel++) {
             if ((channel & 1) == 0) {
                 sample_left +=
@@ -91,4 +95,5 @@ void tonegen_stream(Uint8* stream, int length, int index)
             }
         }
     }
+}
 }

@@ -1,5 +1,5 @@
 /*
- * mix.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2007 Matt Ownby
  *
@@ -24,9 +24,9 @@
 
 #include "config.h"
 
-#include "sound.h"
 #include "../io/mpo_mem.h"
 #include "mix.h"
+#include "sound.h"
 
 #ifdef DEBUG
 #include <assert.h>

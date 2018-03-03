@@ -1,5 +1,5 @@
 /*
-* sn_intf.cpp
+* ____ DAPHNE COPYRIGHT NOTICE ____
 *
 * Copyright (C) 2005 Mark Broadhead
 *
@@ -20,7 +20,7 @@
 * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-// This code is to interface the Daphne sound system with tms9919-sdl.cpp
+// This code is to interface the Hypseus sound system with tms9919-sdl.cpp
 
 #include "config.h"
 
@@ -30,7 +30,6 @@
 
 #include "../io/conout.h"
 #include "sound.h"
-#include "tms9919.hpp"
 #include "tms9919-sdl.hpp"
 
 // this can be set arbitrarily large (as large as it needs to be to support all

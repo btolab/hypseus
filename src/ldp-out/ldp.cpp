@@ -1,6 +1,6 @@
 
 /*
- * ldp.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -26,36 +26,31 @@
 
 // The code in this file translates general LDP functions into LDP-specific
 // functions
-// Part of the Daphne emulator
+// Part of the Hypseus emulator
 
 #ifdef DEBUG
-#include <assert.h>
-#include "../io/numstr.h"
 #include "../cpu/cpu-debug.h"
+#include "../io/numstr.h"
+#include <assert.h>
 #endif
 
+#include "../cpu/cpu.h"
+#include "../cpu/generic_z80.h"
+#include "../game/boardinfo.h"
+#include "../game/game.h"
+#include "../io/conout.h"
+#include "../io/my_stdio.h"
+#include "../timer/timer.h"
+#include "framemod.h"
+#include "ldp.h"
+#include <plog/Log.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../io/serial.h"
-#include "../io/my_stdio.h"
-#include "ldp.h"
-#include "../timer/timer.h"
-#include "../io/conout.h"
-#include "framemod.h"
-#include "../game/game.h"
-#include "../game/boardinfo.h"
-#include "../cpu/cpu.h"
-#include "../cpu/generic_z80.h"
-
-#ifdef _MSC_VER
-#pragma warning(disable : 4100) // disable the warning about unreferenced
-                                // parameters
-#endif
 
 // generic ldp constructor
 ldp::ldp()
-    : need_serial(false), serial_initialized(false), player_initialized(false),
+    : player_initialized(false),
       m_bIsVLDP(false), blitting_allowed(true), skipping_supported(false),
       skip_instead_of_search(false), max_skippable_frames(0),
       m_last_try_frame(0), m_last_seeked_frame(0),
@@ -88,19 +83,6 @@ bool ldp::pre_init()
 
     bool result = true; // assume everything works until we find out otherwise
     bool temp   = true; // needed to make && work the way we want below
-
-    // If we are controlling a real LDP,
-    // or if we are controlling a combo and DVD initialized properly,
-    // then initialize the serial port here
-    if (need_serial) {
-        printline("NOTE : You are attempting to use DAPHNE with a real "
-                  "laserdisc player!");
-        printline(
-            "If you don't have DAPHNE plugged into a real laserdisc player,");
-        printline("you should be using VLDP instead.");
-        serial_initialized = serial_init(get_serial_port(), get_baud_rate());
-        temp               = serial_initialized;
-    }
 
     player_initialized        = init_player();
     result                    = temp && player_initialized;
@@ -139,12 +121,6 @@ void ldp::pre_shutdown()
             pre_stop();
         }
 
-        // if serial has been initialized, shut it down now
-        if (serial_initialized) {
-            serial_close();
-            serial_initialized = false;
-        }
-
         shutdown_player();
         player_initialized = false;
     }
@@ -160,17 +136,17 @@ bool ldp::pre_search(const char *pszFrame, bool block_until_search_finishes)
     char frame[FRAME_ARRAY_SIZE] = {0};
     Uint16 frame_number          = 0; // frame to search to
     bool result                  = false;
-    char s1[81]                  = {0};
+    string s1;
 
     // safety check, if they try to search without checking the search result
     // ...
     if (m_status == LDP_SEARCHING) {
         if (m_bVerbose)
-            printline("LDP : tried to search without checking for search "
-                      "result first! that's bad!");
-        if (m_bVerbose) printline(frame);
+            LOGW << fmt("tried to search without checking for search "
+                        "result first! that's bad! %s",
+                        pszFrame);
 
-        // this is definitely a Daphne bug if this happens, so log it!
+        // this is definitely a Hypseus bug if this happens, so log it!
         m_bug_log.push_back("LDP.CPP, pre_search() : tried to search without "
                             "checking for search result first!");
         return false;
@@ -194,8 +170,7 @@ bool ldp::pre_search(const char *pszFrame, bool block_until_search_finishes)
     //  for Dragon's Lair 2.
     if ((m_status == LDP_PAUSED) && (frame_number == m_uCurrentFrame)) {
         if (m_bVerbose)
-            printline(
-                "LDP NOTE: ignoring seek because we're already on that frame");
+            LOGI << "ignoring seek because we're already on that frame";
         m_status = LDP_PAUSED; // just to be safe
         return true;
     }
@@ -205,27 +180,25 @@ bool ldp::pre_search(const char *pszFrame, bool block_until_search_finishes)
     // If we need to alter the frame # before searching
     if (need_frame_conversion()) {
         Uint16 unadjusted_frame = frame_number;
-        frame_number = (Uint16)do_frame_conversion(frame_number);
+        frame_number            = (Uint16)do_frame_conversion(frame_number);
         framenum_to_frame(frame_number, frame);
-        sprintf(s1, "Search to %d (formerly %d) received", frame_number, unadjusted_frame);
+        s1 = "Search to " + numstr::ToStr(frame_number) + " (formerly " +
+             numstr::ToStr(unadjusted_frame) + ") received";
     } else {
-        sprintf(s1, "Search to %d received", frame_number);
+        s1 = "Search to " + numstr::ToStr(frame_number) + " received";
     }
 
-    if (m_bVerbose) outstr(s1);
-
     // notify us if we're still using outdated blocking searching
-    if (block_until_search_finishes && m_bVerbose) outstr(" [blocking] ");
+    if (block_until_search_finishes && m_bVerbose) s1 += " [blocking] ";
+
+    if (m_bVerbose) LOGD << s1;
 
     // if it's Dragon's Lair/Space Ace, print the board we are on
     if ((g_game->get_game_type() == GAME_LAIR) || (g_game->get_game_type() == GAME_DLE1) ||
         (g_game->get_game_type() == GAME_DLE2) || (g_game->get_game_type() == GAME_ACE)) {
-        Uint8 *cpumem = get_cpu_mem(0); // get the memory for the first (and
+        Uint8 *cpumem = cpu::get_mem(0); // get the memory for the first (and
                                         // only)
-        outstr(" - ");
         print_board_info(cpumem[0xA00E], cpumem[0xA00F], cpumem[Z80_GET_IY]);
-    } else {
-        if (m_bVerbose) newline();
     }
 
     // If the user requested a delay before seeking, make it now
@@ -237,8 +210,8 @@ bool ldp::pre_search(const char *pszFrame, bool block_until_search_finishes)
 #endif
         //		make_delay(get_search_latency());
         if (m_bVerbose)
-            printline("WARNING : search latency needs to be redesigned, it is "
-                      "currently disabled");
+            LOGW << "search latency needs to be redesigned, it is "
+                    "currently disabled";
     }
 
     m_last_try_frame = (Uint16)atoi(frame); // the last frame we tried to seek
@@ -276,7 +249,7 @@ bool ldp::pre_search(const char *pszFrame, bool block_until_search_finishes)
 
                 // we know we may be waiting for a while, so we pause the cpu
                 // timer to avoid getting a flood after the seek completes
-                cpu_pause();
+                cpu::pause();
 
                 // wait for player to change its status or for us to timeout
                 while (elapsed_ms_time(cur_time) < 7000) {
@@ -310,12 +283,11 @@ bool ldp::pre_search(const char *pszFrame, bool block_until_search_finishes)
                     think();
                 }
 
-                cpu_unpause(); // done with the delay, so we can unpause
+                cpu::unpause(); // done with the delay, so we can unpause
 
                 // if we didn't succeed, then return an error
                 if (ldp_stat != LDP_PAUSED) {
-                    if (m_bVerbose)
-                        printline("LDP : blocking search didn't succeed");
+                    if (m_bVerbose) LOGD << "blocking search didn't succeed";
                     result = false;
                 }
             } // end if we were doing a blocking styled search
@@ -323,7 +295,7 @@ bool ldp::pre_search(const char *pszFrame, bool block_until_search_finishes)
 
         // else if search failed immediately
         else {
-            if (m_bVerbose) printline("LDP : search failed immediately");
+            if (m_bVerbose) LOGD << "search failed immediately";
             m_status = LDP_ERROR;
         }
 
@@ -346,7 +318,7 @@ int ldp::get_search_result()
 
     // stall for a couple of seconds to simulate search delay
     if (elapsed_ms_time(m_noldp_timer) > 2000) {
-        if (m_bVerbose) printline("Search success!");
+        if (m_bVerbose) LOGD << "Search success!";
         result = SEARCH_SUCCESS;
     }
     return result;
@@ -360,21 +332,21 @@ bool ldp::pre_skip_forward(Uint16 frames_to_skip)
 
     // only skip if the LDP is playing
     if (m_status == LDP_PLAYING) {
-        Uint16 target_frame           = (Uint16)(m_uCurrentFrame + frames_to_skip);
+        Uint16 target_frame = (Uint16)(m_uCurrentFrame + frames_to_skip);
         unsigned int uOldCurrentFrame = m_uCurrentFrame;
 
         m_iSkipOffsetSincePlay += frames_to_skip;
 
         result = skip_forward(frames_to_skip, target_frame);
 
-        char s[160];
-        snprintf(s, sizeof(s), "Skipped forward %d frames (from %u to %u)",
-                 frames_to_skip, uOldCurrentFrame, target_frame);
-        if (m_bVerbose) printline(s);
+        if (m_bVerbose) {
+            LOGD << fmt("Skipped forward %d frames (from %u to %u)",
+                        frames_to_skip, uOldCurrentFrame, target_frame);
+        }
     } else {
         if (m_bVerbose)
-            printline("LDP ERROR: Skip forward command was called when the "
-                      "disc wasn't playing");
+            LOGW << "Skip forward command was called when the "
+                    "disc wasn't playing";
     }
 
     return (result);
@@ -389,21 +361,21 @@ bool ldp::pre_skip_backward(Uint16 frames_to_skip)
 
     // only skip if the LDP is playing
     if (m_status == LDP_PLAYING) {
-        Uint16 target_frame           = (Uint16)(m_uCurrentFrame - frames_to_skip);
+        Uint16 target_frame = (Uint16)(m_uCurrentFrame - frames_to_skip);
         unsigned int uOldCurrentFrame = m_uCurrentFrame;
 
         m_iSkipOffsetSincePlay -= frames_to_skip;
 
         result = skip_backward(frames_to_skip, target_frame);
 
-        char s[81];
-        snprintf(s, sizeof(s), "Skipped backward %d frames (from %u to %u)",
-                 frames_to_skip, uOldCurrentFrame, target_frame);
-        if (m_bVerbose) printline(s);
+        if (m_bVerbose) {
+            LOGD << fmt("Skipped backward %d frames (from %u to %u)",
+                        frames_to_skip, uOldCurrentFrame, target_frame);
+        }
     } else {
         if (m_bVerbose)
-            printline("LDP ERROR: Skip backward command was called when the "
-                      "disc wasn't playing");
+            LOGW << "Skip backward command was called when the "
+                    "disc wasn't playing";
     }
 
     return (result);
@@ -420,10 +392,10 @@ void ldp::pre_step_forward()
     // bounds check (if we haven't overflowed)
     if (new_frame < ((Uint16)-1)) {
         framenum_to_frame(m_uCurrentFrame + 1, frame);
-        if (m_bVerbose) printline("LDP : Stepping forward one frame");
+        if (m_bVerbose) LOGD << "Stepping forward one frame";
         g_ldp->pre_search(frame, true);
     } else {
-        if (m_bVerbose) printline("LDP: pre_step_forward failed bounds check");
+        if (m_bVerbose) LOGW << "pre_step_forward failed bounds check";
     }
 }
 
@@ -441,7 +413,7 @@ void ldp::pre_step_backward()
     }
 
     framenum_to_frame(new_frame, frame);
-    if (m_bVerbose) printline("LDP : Stepping backward one frame");
+    if (m_bVerbose) LOGD << "Stepping backward one frame";
     g_ldp->pre_search(frame, true);
 }
 
@@ -489,10 +461,10 @@ void ldp::pre_play()
     // OVER TO NON-BLOCKING SEEKING
     if (m_status == LDP_SEARCHING) {
         if (m_bVerbose)
-            printline("LDP : tried to play without checking to see if we were "
-                      "still seeking! that's bad!");
+            LOGW << "tried to play without checking to see if we were "
+                    "still seeking! that's bad!";
 
-        // if this ever happens, it is a bug in Daphne, so log it
+        // if this ever happens, it is a bug in Hypseus, so log it
         m_bug_log.push_back("LDP.CPP, pre_play() : tried to play without "
                             "checking to see if we're still seeking!");
 
@@ -522,9 +494,9 @@ void ldp::pre_play()
         // if the disc may need to take a long time to spin up, then pause the
         // cpu timers while the disc spins up
         if (m_status == LDP_STOPPED) {
-            cpu_pause();
+            cpu::pause();
             m_play_time = play();
-            cpu_unpause();
+            cpu::unpause();
         } else {
             m_play_time = play();
         }
@@ -533,13 +505,12 @@ void ldp::pre_play()
                                           // the next vsync
         m_status = LDP_PLAYING;
     } else {
-        if (m_bVerbose)
-            printline("LDP : disc is already playing, play command ignored");
+        if (m_bVerbose) LOGD << "disc is already playing, play command ignored";
     }
 
     if (m_bVerbose)
-        printline("Play"); // moved to the end of the function so as to not
-                           // cause lag before play command could be issued
+        LOGD << "Play"; // moved to the end of the function so as to not
+                        // cause lag before play command could be issued
 }
 
 // starts playing the laserdisc
@@ -557,17 +528,16 @@ void ldp::pre_pause()
 #ifdef DEBUG
         string s = "m_uMsFrameBoundary is " + numstr::ToStr(m_uMsFrameBoundary) +
                    ", elapsed ms is " + numstr::ToStr(m_uElapsedMsSincePlay);
-        if (m_bVerbose) printline(s.c_str());
+        if (m_bVerbose) LOGD << s;
 #endif
         m_last_seeked_frame    = m_uCurrentFrame;
         m_iSkipOffsetSincePlay = m_uCurrentOffsetFrame = m_uMsFrameBoundary = 0;
         pause();
         m_status = LDP_PAUSED;
-        if (m_bVerbose) printline("Pause");
+        if (m_bVerbose) LOGD << "Pause";
     } else {
         if (m_bVerbose)
-            printline(
-                "LDP : Received pause while disc was not playing, ignoring");
+            LOGD << "Received pause while disc was not playing, ignoring";
     }
 }
 
@@ -582,7 +552,7 @@ void ldp::pre_stop()
     m_last_seeked_frame = m_uCurrentFrame = 0;
     stop();
     m_status = LDP_STOPPED;
-    if (m_bVerbose) printline("Stop");
+    if (m_bVerbose) LOGD << "Stop";
 }
 
 // stops the disc
@@ -606,8 +576,8 @@ bool ldp::pre_change_speed(unsigned int uNumerator, unsigned int uDenominator)
         else {
             m_uFramesToSkipPerFrame = 0;
             if (m_bVerbose)
-                printline("ERROR : uNumerator of 0 sent to pre_change_speed, "
-                          "this isn't supported, going to 1X");
+                LOGE << "uNumerator of 0 sent to pre_change_speed, "
+                        "this isn't supported, going to 1X";
         }
     }
     // else if this is < 1X
@@ -623,14 +593,14 @@ bool ldp::pre_change_speed(unsigned int uNumerator, unsigned int uDenominator)
         else {
             m_uFramesToStallPerFrame = 0;
             if (m_bVerbose)
-                printline("ERROR : uDenominator of 0 sent to pre_change_speed, "
-                          "this is undefined, going to 1X");
+                LOGE << "uDenominator of 0 sent to pre_change_speed, "
+                        "this is undefined, going to 1X";
         }
     }
     // else it's a non-standard speed, so do some kind of error
     else {
-        strMsg = "ERROR : unsupported speed specified (" + numstr::ToStr(uNumerator) +
-                 "/" + numstr::ToStr(uDenominator) + "), setting to 1X";
+        LOGE << "unsupported speed specified (" + numstr::ToStr(uNumerator) +
+                    "/" + numstr::ToStr(uDenominator) + "), setting to 1X";
         uNumerator = uDenominator = 1;
     }
 
@@ -642,7 +612,11 @@ bool ldp::pre_change_speed(unsigned int uNumerator, unsigned int uDenominator)
         strMsg = "Unable to change ";
     strMsg += "speed to " + numstr::ToStr(uNumerator) + "/" +
               numstr::ToStr(uDenominator) + "X";
-    if (m_bVerbose) printline(strMsg.c_str());
+    if (m_bVerbose && bResult) {
+        LOGD << strMsg.c_str();
+    } else if (!bResult) {
+        LOGE << strMsg.c_str();
+    }
     return bResult;
 }
 
@@ -653,22 +627,22 @@ bool ldp::change_speed(unsigned int uNumerator, unsigned int uDenominator)
 
 void ldp::think_delay(unsigned int uMsDelay)
 {
-    bool bEmulatedCpu = (get_cpu_hz(0) != 0); // whether we've got an emulated
+    bool bEmulatedCpu = (cpu::get_hz(0) != 0); // whether we've got an emulated
                                               // cpu
 
     // safety check: make sure that we're not using an emulated CPU
     if (bEmulatedCpu) {
         if (m_bVerbose)
-            printline("think_delay() should not be used with an emulated CPU. "
-                      "Don't use blocking seeking maybe?");
+            LOGW << "should not be used with an emulated CPU. "
+                    "Don't use blocking seeking maybe?";
         set_quitflag();
     }
     // safety check: make sure pre_init has already been called so that
     // m_start_time has been initialized
     else if (!m_bPreInitCalled) {
         if (m_bVerbose)
-            printline("think_delay() should not be called until pre_init() has "
-                      "been called.");
+            LOGW << "should not be called until pre_init() has "
+                    "been called.";
         set_quitflag();
     }
 
@@ -681,13 +655,6 @@ void ldp::think_delay(unsigned int uMsDelay)
 
         // if we're ahead of where we need to be, then it's ok to stall ...
         if (uElapsedMs < m_uElapsedMsSinceStart) {
-            /*
-            string msg = "uElapsedMs is " + numstr::ToStr(uElapsedMs) + " and
-            m_uElapsedMssinceStart is " +
-                numstr::ToStr(m_uElapsedMsSinceStart);
-            printline(msg.c_str());	// REMOVE ME
-            */
-
             MAKE_DELAY(1);
         }
         // otherwise we're caught up or behind, so just loop so we can make sure
@@ -794,9 +761,9 @@ void ldp::pre_think()
         // otherwise we may deliberately
         //  be calling this function slower than every 1 ms, such as ffr() or
         //  vldp's internal tests )
-        if (get_cpu_hz(0)) {
-            unsigned int uElapsedMS = elapsed_ms_time(m_play_time); // compute
-                                                                    // milliseconds
+        if (cpu::get_hz(0)) {
+            // compute milliseconds
+            unsigned int uElapsedMS = elapsed_ms_time(m_play_time);
             unsigned int time_result =
                 m_last_seeked_frame + m_iSkipOffsetSincePlay +
                 (unsigned int)((((Uint64)uElapsedMS) * g_game->get_disc_fpks()) / 1000000);
@@ -819,11 +786,11 @@ void ldp::pre_think()
                 static unsigned int last_warning = 0;
 
                 if (elapsed_ms_time(last_warning) > 1000) {
-                    string s = "WARNING : cycle frame is ";
+                    string s = "cycle frame is ";
                     s += numstr::ToStr(uCurrentFrame) + " but time frame is ";
                     s += numstr::ToStr(time_result) + " which has a diff of ";
                     s += numstr::ToStr(diff);
-                    if (m_bVerbose) printline(s.c_str());
+                    if (m_bVerbose) LOGW << s;
                     last_warning = refresh_ms_time();
                 }
             }
@@ -875,23 +842,6 @@ void ldp::increment_current_frame()
     //  to the new frame.  We do NOT want to change frames immediately when
     //  skipping.
     m_uCurrentFrame = m_last_seeked_frame + m_iSkipOffsetSincePlay + m_uCurrentOffsetFrame;
-
-#if 0
-	{
-		static unsigned int uOldFrame = 0;
-		static unsigned int uOldTime = 0;
-
-		if (m_uCurrentFrame != uOldFrame)
-		{
-			unsigned int uTimer = refresh_ms_time();
-			unsigned int uDiff = uTimer - uOldTime;
-			string strMsg = "[" + numstr::ToStr(m_uCurrentFrame) + "] Time since last frame change: " + numstr::ToStr(uDiff) + " ms";
-			printline(strMsg.c_str());
-			uOldTime = uTimer;
-			uOldFrame = m_uCurrentFrame;
-		}
-	}
-#endif
 }
 
 void ldp::think() {}
@@ -945,10 +895,10 @@ int ldp::get_status()
         if (stat == SEARCH_SUCCESS) {
             m_dont_get_search_result = true;
             m_last_seeked_frame = m_uCurrentFrame = m_last_try_frame;
-            m_status = LDP_PAUSED;
+            m_status                              = LDP_PAUSED;
 
             // Update sram after every search if user desires it
-            //  (so that the DAPHNE can be improperly terminated, if it's inside
+            //  (allow for improper termination, if it's inside
             //  a cab and powered off, for example)
             // This is the best place to do this because it's right after a seek
             // which can take a second or two anyway.
@@ -983,30 +933,28 @@ void ldp::set_stop_on_quit(bool value) { m_stop_on_quit = value; }
 void ldp::set_search_blanking(bool enabled)
 {
     if (m_bVerbose)
-        printline("NOTE : Search blanking cannot be modified with this "
-                  "laserdisc player!");
+        LOGI << "Search blanking cannot be modified with this "
+                "laserdisc player!";
 }
 
 // causes LDP to blank video while skipping
 void ldp::set_skip_blanking(bool enabled)
 {
     if (m_bVerbose)
-        printline("NOTE : Skip blanking cannot be modified with this laserdisc "
-                  "player!");
+        LOGI << "Skip blanking cannot be modified with this laserdisc "
+                "player!";
 }
 
 void ldp::set_seek_frames_per_ms(double value)
 {
     if (m_bVerbose)
-        printline(
-            "NOTE : Seek delay is not supported with this laserdisc player!");
+        LOGI << "Seek delay is not supported with this laserdisc player!";
 }
 
 void ldp::set_min_seek_delay(unsigned int value)
 {
     if (m_bVerbose)
-        printline(
-            "NOTE : Seek delay is not supported with this laserdisc player!");
+        LOGI << "Seek delay is not supported with this laserdisc player!";
 }
 
 // causes sram to be saved after every seek
@@ -1017,22 +965,22 @@ void ldp::set_sram_continuous_update(bool value)
 
 void ldp::enable_audio1()
 {
-    if (m_bVerbose) printline("Audio1 enable received (ignored)");
+    if (m_bVerbose) LOGD << "Audio1 enable received (ignored)";
 }
 
 void ldp::enable_audio2()
 {
-    if (m_bVerbose) printline("Audio2 enable received (ignored)");
+    if (m_bVerbose) LOGD << "Audio2 enable received (ignored)";
 }
 
 void ldp::disable_audio1()
 {
-    if (m_bVerbose) printline("Audio1 disable received (ignored)");
+    if (m_bVerbose) LOGD << "Audio1 disable received (ignored)";
 }
 
 void ldp::disable_audio2()
 {
-    if (m_bVerbose) printline("Audio2 disable received (ignored)");
+    if (m_bVerbose) LOGD << "Audio2 disable received (ignored)";
 }
 
 // asks LDP to take a screenshot if that's possible
@@ -1040,8 +988,8 @@ void ldp::disable_audio2()
 void ldp::request_screenshot()
 {
     if (m_bVerbose)
-        printline("NOTE: current laserdisc player does not support taking "
-                  "screenshots, sorry");
+        LOGI << "current laserdisc player does not support taking "
+                "screenshots, sorry";
 }
 
 // returns the width of the laserdisc video (only meaningful with mpeg)
@@ -1085,15 +1033,12 @@ void ldp::get_bug_log(list<string> &log)
 
 void ldp::print_frame_info()
 {
-    string s = "Current frame is " + numstr::ToStr(m_uCurrentFrame);
-    if (m_bVerbose) printline(s.c_str());
-
-    unsigned int u = m_uMsVblankBoundary - m_uElapsedMsSinceStart;
-    s = "Virtual milliseconds until next vblank: " + numstr::ToStr(u);
-    if (m_bVerbose) printline(s.c_str());
-
-    s = "Vblanks since frame changed: " + numstr::ToStr(m_uVblankMiniCount);
-    if (m_bVerbose) printline(s.c_str());
+    if (m_bVerbose) {
+        unsigned int u = m_uMsVblankBoundary - m_uElapsedMsSinceStart;
+        LOGD << fmt("Current frame is %d, ms to next vblank: %d, vlbank since "
+                    "frame change: %d",
+                    m_uCurrentFrame, u, m_uVblankMiniCount);
+    }
 }
 
 void ldp::setVerbose(bool thisBol) { m_bVerbose = thisBol; }

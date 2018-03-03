@@ -1,5 +1,5 @@
 /*
-* gisound.cpp
+* ____ DAPHNE COPYRIGHT NOTICE ____
 *
 * Copyright (C) 2005 Mark Broadhead
 *
@@ -26,22 +26,25 @@
 
 #include "config.h"
 
-#include "sound.h"
-#include "gisound.h"
 #include "../io/conout.h"
+#include "gisound.h"
+#include "sound.h"
 #include <memory.h>
+#include <plog/Log.h>
 
 #define MAX_GISOUND_CHIPS 4
+
+namespace gisound
+{
+
 int g_gisoundchip_count = -1;
 
 gi_sound_chip *g_gi_chips[MAX_GISOUND_CHIPS] = {NULL};
 Sint16 g_volumetable[16];
 
-int gisound_initialize(Uint32 core_frequency)
+int initialize(Uint32 core_frequency)
 {
-    char s[81] = {0};
-    sprintf(s, "GI Sound chip initialized at %d Hz", core_frequency);
-    printline(s);
+    LOGD << fmt("GI Sound chip initialized at %d Hz", core_frequency);
     g_gi_chips[++g_gisoundchip_count] = new gi_sound_chip;
     memset(g_gi_chips[g_gisoundchip_count], 0, sizeof(gi_sound_chip));
     g_gi_chips[g_gisoundchip_count]->core_clock              = core_frequency;
@@ -81,7 +84,7 @@ int gisound_initialize(Uint32 core_frequency)
     return g_gisoundchip_count;
 }
 
-void gisound_writedata(Uint32 address, Uint32 data, int index)
+void writedata(Uint32 address, Uint32 data, int index)
 {
     Uint16 chan_a_tone_period;
     Uint16 chan_b_tone_period;
@@ -101,7 +104,8 @@ void gisound_writedata(Uint32 address, Uint32 data, int index)
             (g_gi_chips[index]->register_set[CHANNEL_A_TONE_PERIOD_COARSE] << 8);
         old_bytes_per_switch = g_gi_chips[index]->chan_a_bytes_per_switch;
         g_gi_chips[index]->chan_a_bytes_per_switch =
-            (int)((AUDIO_FREQ * (chan_a_tone_period * 16.0) / g_gi_chips[index]->core_clock * 2) + .5);
+            (int)((sound::FREQ * (chan_a_tone_period * 16.0) / g_gi_chips[index]->core_clock * 2) +
+                  .5);
         if (g_gi_chips[index]->chan_a_bytes_per_switch < 4) {
             g_gi_chips[index]->chan_a_bytes_per_switch = 4;
         }
@@ -118,7 +122,8 @@ void gisound_writedata(Uint32 address, Uint32 data, int index)
             (g_gi_chips[index]->register_set[CHANNEL_B_TONE_PERIOD_COARSE] << 8);
         old_bytes_per_switch = g_gi_chips[index]->chan_b_bytes_per_switch;
         g_gi_chips[index]->chan_b_bytes_per_switch =
-            (int)((AUDIO_FREQ * (chan_b_tone_period * 16.0) / g_gi_chips[index]->core_clock * 2) + .5);
+            (int)((sound::FREQ * (chan_b_tone_period * 16.0) / g_gi_chips[index]->core_clock * 2) +
+                  .5);
         if (g_gi_chips[index]->chan_b_bytes_per_switch < 4) {
             g_gi_chips[index]->chan_b_bytes_per_switch = 4;
         }
@@ -135,7 +140,8 @@ void gisound_writedata(Uint32 address, Uint32 data, int index)
             (g_gi_chips[index]->register_set[CHANNEL_C_TONE_PERIOD_COARSE] << 8);
         old_bytes_per_switch = g_gi_chips[index]->chan_c_bytes_per_switch;
         g_gi_chips[index]->chan_c_bytes_per_switch =
-            (int)((AUDIO_FREQ * (chan_c_tone_period * 16.0) / g_gi_chips[index]->core_clock * 2) + .5);
+            (int)((sound::FREQ * (chan_c_tone_period * 16.0) / g_gi_chips[index]->core_clock * 2) +
+                  .5);
         if (g_gi_chips[index]->chan_c_bytes_per_switch < 4) {
             g_gi_chips[index]->chan_c_bytes_per_switch = 4;
         }
@@ -148,7 +154,7 @@ void gisound_writedata(Uint32 address, Uint32 data, int index)
         g_gi_chips[index]->noise_period = data & 0x1f;
         old_bytes_per_switch = g_gi_chips[index]->noise_bytes_per_switch;
         g_gi_chips[index]->noise_bytes_per_switch =
-            (int)((AUDIO_FREQ * (g_gi_chips[index]->noise_period * 16.0) /
+            (int)((sound::FREQ * (g_gi_chips[index]->noise_period * 16.0) /
                    g_gi_chips[index]->core_clock * 2) +
                   .5);
         if (g_gi_chips[index]->noise_bytes_per_switch < 4) {
@@ -178,15 +184,15 @@ void gisound_writedata(Uint32 address, Uint32 data, int index)
         // if these were just enabled reset the counters
         if (g_gi_chips[index]->tone_a && !old_tone_a) {
             g_gi_chips[g_gisoundchip_count]->chan_a_flip = 1;
-            g_gi_chips[index]->chan_a_bytes_to_go        = g_gi_chips[index]->chan_a_bytes_per_switch;
+            g_gi_chips[index]->chan_a_bytes_to_go = g_gi_chips[index]->chan_a_bytes_per_switch;
         }
         if (g_gi_chips[index]->tone_b && !old_tone_b) {
             g_gi_chips[g_gisoundchip_count]->chan_b_flip = 1;
-            g_gi_chips[index]->chan_b_bytes_to_go        = g_gi_chips[index]->chan_b_bytes_per_switch;
+            g_gi_chips[index]->chan_b_bytes_to_go = g_gi_chips[index]->chan_b_bytes_per_switch;
         }
         if (g_gi_chips[index]->tone_c && !old_tone_c) {
             g_gi_chips[g_gisoundchip_count]->chan_c_flip = 1;
-            g_gi_chips[index]->chan_c_bytes_to_go        = g_gi_chips[index]->chan_c_bytes_per_switch;
+            g_gi_chips[index]->chan_c_bytes_to_go = g_gi_chips[index]->chan_c_bytes_per_switch;
         }
         break;
 
@@ -221,7 +227,7 @@ void gisound_writedata(Uint32 address, Uint32 data, int index)
     case ENVELOPE_PERIOD_COARSE:
         // Envelope Period is a 16 bit number made up of COURSE<<8|FINE
         g_gi_chips[index]->envelope_period =
-            (int)((AUDIO_FREQ * 256.0 *
+            (int)((sound::FREQ * 256.0 *
                    (g_gi_chips[index]->register_set[ENVELOPE_PERIOD_FINE] |
                     (g_gi_chips[index]->register_set[ENVELOPE_PERIOD_COARSE] << 8)) /
                    g_gi_chips[index]->core_clock / 4) +
@@ -232,8 +238,8 @@ void gisound_writedata(Uint32 address, Uint32 data, int index)
             g_gi_chips[index]->envelope_period = 4;
         }
         g_gi_chips[index]->envelope_cycle_complete = false;
-        g_gi_chips[index]->envelope_bytes_to_go    = g_gi_chips[index]->envelope_period;
-        g_gi_chips[index]->envelope_step           = 0;
+        g_gi_chips[index]->envelope_bytes_to_go = g_gi_chips[index]->envelope_period;
+        g_gi_chips[index]->envelope_step        = 0;
         break;
 
     case ENVELOPE_SHAPE_CYCLE:
@@ -253,7 +259,7 @@ void gisound_writedata(Uint32 address, Uint32 data, int index)
     }
 }
 
-void gisound_stream(Uint8 *stream, int length, int index)
+void stream(Uint8 *stream, int length, int index)
 {
     for (int pos = 0; pos < length; pos += 4) {
         // endian-independent! :)
@@ -312,7 +318,7 @@ void gisound_stream(Uint8 *stream, int length, int index)
                 ((~(g_gi_chips[index]->random_seed ^ (g_gi_chips[index]->random_seed >> 3)) & 0x01)
                  << 16);
             //			sprintf(s,"Random number %d",
-            //g_gi_chips[index]->random_number);
+            // g_gi_chips[index]->random_number);
             //			printline(s);
 
             if (g_gi_chips[index]->random_seed & 0x01) {
@@ -373,8 +379,9 @@ void gisound_stream(Uint8 *stream, int length, int index)
     }
 }
 
-void gisound_shutdown(int index)
+void shutdown(int index)
 {
     delete g_gi_chips[index];
     g_gi_chips[index] = NULL;
+}
 }

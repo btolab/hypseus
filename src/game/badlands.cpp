@@ -1,5 +1,5 @@
 /*
- * badlands.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001-2005 Mark Broadhead
  *
@@ -28,6 +28,7 @@
 
 #include <string.h>
 #include <math.h>
+#include <plog/Log.h>
 #include "badlands.h"
 #include "../cpu/cpu.h"
 #include "../cpu/mc6809.h"
@@ -43,7 +44,7 @@
 
 badlands::badlands()
 {
-    struct cpudef cpu;
+    struct cpu::def cpu;
 
     m_shortgamename = "badlands";
     memset(banks, 0xFF, 3); // fill banks with 0xFF's
@@ -54,8 +55,8 @@ badlands::badlands()
     m_video_overlay_height = BADLANDS_OVERLAY_H;
     m_palette_color_count  = BADLANDS_COLOR_COUNT;
 
-    memset(&cpu, 0, sizeof(struct cpudef));
-    cpu.type              = CPU_M6809;
+    memset(&cpu, 0, sizeof(struct cpu::def));
+    cpu.type              = cpu::type::M6809;
     cpu.hz                = BADLANDS_CPU_HZ / 4;
     cpu.initial_pc        = 0;
     cpu.must_copy_context = false;
@@ -63,13 +64,13 @@ badlands::badlands()
     cpu.irq_period[1]     = (1000.0 / 8.0 / 59.94); // firq 8 times per vblank
     cpu.nmi_period        = (1000.0 / 59.94);       // nmi from vblank
     cpu.mem = m_cpumem;
-    add_cpu(&cpu); // add 6809 cpu
+    cpu::add(&cpu); // add 6809 cpu
 
-    struct sounddef soundchip;
+    struct sound::chip soundchip;
 
-    soundchip.type = SOUNDCHIP_SN76496; // Badlands uses the SN76496 sound chip
+    soundchip.type = sound::CHIP_SN76496; // Badlands uses the SN76496 sound chip
     soundchip.hz   = BADLANDS_CPU_HZ / 8;
-    m_soundchip_id = add_soundchip(&soundchip);
+    m_soundchip_id = sound::add_chip(&soundchip);
 
     firq_on = false;
     irq_on  = false;
@@ -141,7 +142,7 @@ void badlands::do_irq(unsigned int which_irq)
         }
         break;
     default:
-        printline("Invalid IRQ set in badlands.cpp!");
+        LOGW << "Invalid IRQ set";
         break;
     }
 }
@@ -153,7 +154,7 @@ void badlands::do_nmi()
         mc6809_nmi = 1;
     }
 
-    video_blit(); // the NMI runs at the same period as the monitor vsync
+    blit(); // the NMI runs at the same period as the monitor vsync
 }
 
 Uint8 badlands::cpu_mem_read(Uint16 addr)
@@ -173,7 +174,7 @@ Uint8 badlands::cpu_mem_read(Uint16 addr)
 
     // Laserdisc (in)
     else if (addr == 0x1000) {
-        result = read_ldv1000();
+        result = ldv1000::read();
     }
 
     // controls
@@ -186,8 +187,6 @@ Uint8 badlands::cpu_mem_read(Uint16 addr)
 
 void badlands::cpu_mem_write(Uint16 addr, Uint8 value)
 {
-    char s[81] = {0};
-
     // sound data
     if (addr == 0x0000 && !m_prefer_samples) {
         // reverse all the bits (the chip is wired up so D0 goes to D7, D1 to
@@ -195,12 +194,12 @@ void badlands::cpu_mem_write(Uint16 addr, Uint8 value)
         value = ((value & 0x1) << 7) | ((value & 0x2) << 5) | ((value & 0x4) << 3) |
                 ((value & 0x8) << 1) | ((value & 0x10) >> 1) | ((value & 0x20) >> 3) |
                 ((value & 0x40) >> 5) | ((value & 0x80) >> 7);
-        audio_writedata(m_soundchip_id, value);
+        sound::writedata(m_soundchip_id, value);
     }
 
     // Laserdisc (out)
     else if (addr == 0x0800) {
-        write_ldv1000(value);
+        ldv1000::write(value);
     }
 
     // shoot led
@@ -218,9 +217,9 @@ void badlands::cpu_mem_write(Uint16 addr, Uint8 value)
     // DSP On
     else if (addr == 0x1003) {
         if (value) {
-            palette_set_transparency(0, false); // disable laserdisc video
+            palette::set_transparency(0, false); // disable laserdisc video
         } else {
-            palette_set_transparency(0, true); // enable laserdisc video
+            palette::set_transparency(0, true); // enable laserdisc video
         }
     }
 
@@ -267,13 +266,13 @@ void badlands::cpu_mem_write(Uint16 addr, Uint8 value)
         // value = ((value & 0x1) << 7) | ((value & 0x2) << 5) | ((value & 0x4)
         // << 3) | ((value & 0x8) << 1) | ((value & 0x10) >> 1) | ((value &
         // 0x20) >> 3) | ((value & 0x40) >> 5) | ((value & 0x80) >> 7);
-        // audio_writedata(m_soundchip_id, value);
+        // sound::writedata(m_soundchip_id, value);
 
         // 0xE7 seems to trigger the shot sound (once registers have been
         // loaded)
         // sprintf(s, "Write to %x with %x", addr, value);
         // printline(s);
-        if (value == 0xE7 && m_prefer_samples) sound_play(S_BL_SHOT);
+        if (value == 0xE7 && m_prefer_samples) sound::play(S_BL_SHOT);
     }
 
     // video memory is being written to, so the screen needs to be updated
@@ -290,8 +289,7 @@ void badlands::cpu_mem_write(Uint16 addr, Uint8 value)
     }
 
     else {
-        sprintf(s, "Write to %x with %x", addr, value);
-        printline(s);
+        LOGW << fmt("Write to %x with %x", addr, value);
     }
 
     m_cpumem[addr] = value;
@@ -299,13 +297,11 @@ void badlands::cpu_mem_write(Uint16 addr, Uint8 value)
 
 Uint8 badlandp::cpu_mem_read(Uint16 addr)
 {
-    char s[81] = {0};
-
     Uint8 result = m_cpumem[addr];
 
     // Laserdisc
     if (addr == 0x0000) {
-        result = read_ldv1000();
+        result = ldv1000::read();
     }
     // controls
     else if (addr == 0x0c00) {
@@ -324,8 +320,7 @@ Uint8 badlandp::cpu_mem_read(Uint16 addr)
     // ROM
     else if (addr >= 0xc000) {
     } else {
-        sprintf(s, "Read from %x", addr);
-        printline(s);
+        LOGW << fmt("Read from %x", addr);
     }
 
     return result;
@@ -333,11 +328,9 @@ Uint8 badlandp::cpu_mem_read(Uint16 addr)
 
 void badlandp::cpu_mem_write(Uint16 addr, Uint8 value)
 {
-    char s[81] = {0};
-
     // Laserdisc
     if (addr == 0x0400) {
-        write_ldv1000(value);
+        ldv1000::write(value);
     }
     // coin counter
     else if (addr == 0x0800) {
@@ -352,9 +345,9 @@ void badlandp::cpu_mem_write(Uint16 addr, Uint8 value)
     // display disable
     else if (addr == 0x0803) {
         if (value) {
-            palette_set_transparency(0, false); // disable laserdisc video
+            palette::set_transparency(0, false); // disable laserdisc video
         } else {
-            palette_set_transparency(0, true); // enable laserdisc video
+            palette::set_transparency(0, true); // enable laserdisc video
         }
     }
     // ?
@@ -371,7 +364,7 @@ void badlandp::cpu_mem_write(Uint16 addr, Uint8 value)
     }
     // sound data
     else if (addr == 0x1400) {
-        audio_writedata(m_soundchip_id, value);
+        sound::writedata(m_soundchip_id, value);
     }
     // sound data
     else if (addr == 0x1800) {
@@ -384,8 +377,7 @@ void badlandp::cpu_mem_write(Uint16 addr, Uint8 value)
     // scratch ram
     else if (addr >= 0x2800 && addr <= 0x2fff) {
     } else {
-        sprintf(s, "Write to %x with %x", addr, value);
-        printline(s);
+        LOGW << fmt("Write to %x with %x", addr, value);
     }
 
     m_cpumem[addr] = value;
@@ -425,12 +417,12 @@ void badlands::palette_calculate()
         temp_color.b = (Uint8)(255 * pow((static_cast<double>(temp_color.b)) / 255,
                                          1 / BADLANDS_GAMMA));
 
-        palette_set_color(i, temp_color);
+        palette::set_color(i, temp_color);
     }
 }
 
 // updates badlands's video
-void badlands::video_repaint()
+void badlands::repaint()
 {
     for (int charx = charx_offset; charx < 40 + charx_offset; charx++) {
         for (int chary = chary_offset; chary < 30 + chary_offset; chary++) {
@@ -488,7 +480,7 @@ void badlands::input_enable(Uint8 move)
     case SWITCH_TEST:
         break;
     default:
-        printline("Error, bug in move enable");
+        LOGW << "bug in move enable";
         break;
     }
 }
@@ -523,7 +515,7 @@ void badlands::input_disable(Uint8 move)
                       // during boot
         break;
     default:
-        printline("Error, bug in move enable");
+        LOGW << "bug in move enable";
         break;
     }
 }
@@ -541,7 +533,7 @@ bool badlands::set_bank(unsigned char which_bank, unsigned char value)
         banks[2] = (unsigned char)(value ^ 0xFF); // switches are active low
         break;
     default:
-        printline("ERROR: Bank specified is out of range!");
+        LOGW << "Bank specified is out of range!";
         result = false;
         break;
     }
@@ -551,8 +543,8 @@ bool badlands::set_bank(unsigned char which_bank, unsigned char value)
 
 void badlands::reset()
 {
-    cpu_reset();
-    reset_ldv1000();
+    cpu::reset();
+    ldv1000::reset();
 }
 
 void badlands::set_preset(int preset)

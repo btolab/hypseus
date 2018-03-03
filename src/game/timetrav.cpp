@@ -1,5 +1,5 @@
 /*
- * timetrav.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2005 Mark Broadhead
  *
@@ -36,11 +36,11 @@
 timetrav::timetrav()
 {
     m_shortgamename = "timetrav";
-    memset(m_cpumem, 0, CPU_MEM_SIZE);
+    memset(m_cpumem, 0, cpu::MEM_SIZE);
 
-    struct cpudef cpu;
-    memset(&cpu, 0, sizeof(struct cpudef));
-    cpu.type              = CPU_I88;
+    struct cpu::def cpu;
+    memset(&cpu, 0, sizeof(struct cpu::def));
+    cpu.type              = cpu::type::I88;
     cpu.hz                = TIMETRAV_CPU_HZ;
     cpu.irq_period[0]     = 0;
     cpu.irq_period[1]     = 0;
@@ -48,7 +48,7 @@ timetrav::timetrav()
     cpu.initial_pc        = 0xFFFF0;
     cpu.must_copy_context = false;
     cpu.mem = m_cpumem;
-    add_cpu(&cpu); // add this cpu to the list (it will be our only one)
+    cpu::add(&cpu); // add this cpu to the list (it will be our only one)
 
     m_disc_fps = 29.97;
     //	m_game_type = GAME_TIMETRAV;
@@ -108,7 +108,7 @@ void timetrav::cpu_mem_write(Uint32 addr, Uint8 value)
 void timetrav::port_write(Uint16 port, Uint8 value)
 {
     char s[80];
-    static char display_string[9] = {0};
+    //static char display_string[9] = {0};
 
     switch (port) {
     case 0x1180:
@@ -120,9 +120,9 @@ void timetrav::port_write(Uint16 port, Uint8 value)
     case 0x1186:
     case 0x1187:
         m_video_overlay_needs_update = true;
-        display_string[port & 0x07] = value;
+        //display_string[port & 0x07] = value;
         //draw_string(display_string, 0, 0, get_active_video_overlay());
-        video_blit();
+        blit();
         break;
     default:
         sprintf(s, "Unmapped write to port %x, value %x", port, value);
@@ -171,6 +171,6 @@ void timetrav::palette_calculate()
         temp_color.g = (unsigned char)i;
         temp_color.b = (unsigned char)i;
 
-        palette_set_color(i, temp_color);
+        palette::set_color(i, temp_color);
     }
 }

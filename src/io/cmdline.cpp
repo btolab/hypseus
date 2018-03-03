@@ -1,5 +1,5 @@
 /*
- * cmdline.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -37,7 +37,7 @@
 #include "../io/numstr.h"
 #include "../video/video.h"
 #include "../video/led.h"
-#include "../daphne.h"
+#include "../hypseus.h"
 #include "../cpu/cpu-debug.h" // for set_cpu_trace
 #include "../game/lair.h"
 #include "../game/cliff.h"
@@ -70,12 +70,6 @@
 #endif // BUILD_SINGE
 #include "../game/test_sb.h"
 #include "../ldp-out/ldp.h"
-#include "../ldp-out/sony.h"
-#include "../ldp-out/pioneer.h"
-#include "../ldp-out/ld-v6000.h"
-#include "../ldp-out/hitachi.h"
-#include "../ldp-out/philips.h"
-#include "../ldp-out/ldp-combo.h"
 #include "../ldp-out/ldp-vldp.h"
 #include "../ldp-out/framemod.h"
 
@@ -140,14 +134,14 @@ bool parse_homedir()
 #ifndef MAC_OSX // Zaph doesn't seem to like this behavior and he is maintaining
                 // the Mac build, so...
         // on unix, if the user doesn't specify a homedir, then we want to
-        // default to ~/.daphne
+        // default to ~/.hypseus
         //  to follow standard unix convention.
         const char *homeenv = getenv("HOME");
 
         // this is always expected to be non-NULL
         if (homeenv != NULL) {
             string strHomeDir = homeenv;
-            strHomeDir += "/.daphne";
+            strHomeDir += "/.hypseus";
             g_homedir.set_homedir(strHomeDir);
         }
 // else we couldn't set the homedir, so just leave it as default
@@ -387,8 +381,7 @@ bool parse_game_type()
     } else if (strcasecmp(s, "uvt") == 0) {
         g_game = new uvt();
     } else {
-        outstr("ERROR: Unknown game type specified : ");
-        printline(s);
+        printline("ERROR: Unknown game type specified : %s", s);
         result = false;
     }
 
@@ -428,22 +421,10 @@ bool parse_ldp_type()
 
     net_set_ldpname(s); // report to server which ldp we are using
 
-    if (strcasecmp(s, "combo") == 0) {
-        g_ldp = new combo();
-    } else if (strcasecmp(s, "fast_noldp") == 0) {
+    if (strcasecmp(s, "fast_noldp") == 0) {
         g_ldp = new fast_noldp(); // 'no seek-delay' version of noldp
-    } else if (strcasecmp(s, "hitachi") == 0) {
-        g_ldp = new hitachi();
     } else if (strcasecmp(s, "noldp") == 0) {
         g_ldp = new ldp(); // generic interface
-    } else if (strcasecmp(s, "philips") == 0) {
-        g_ldp = new philips();
-    } else if (strcasecmp(s, "pioneer") == 0) {
-        g_ldp = new pioneer();
-    } else if (strcasecmp(s, "sony") == 0) {
-        g_ldp = new sony();
-    } else if (strcasecmp(s, "v6000") == 0) {
-        g_ldp = new v6000();
     } else if (strcasecmp(s, "vldp") == 0) {
         g_ldp = new ldp_vldp();
     } else {
@@ -467,8 +448,6 @@ bool parse_cmd_line(int argc, char **argv)
     char s[320] = {0}; // in case they pass in a huge directory as part of the
                        // framefile
     int i                 = 0;
-    bool log_was_disabled = false; // if we actually get "-nolog" while going
-                                   // through arguments
 
     //////////////////////////////////////////////////////////////////////////////////////
 
@@ -498,7 +477,7 @@ bool parse_cmd_line(int argc, char **argv)
 
             // If they are defining an alternate 'data' directory, where all
             // other files aside from the executable live.
-            // Primary used for linux to separate binary file (eg. daphne.bin)
+            // Primary used for linux to separate binary file (eg. hypseus.bin)
             // and other datafiles .
             else if (strcasecmp(s, "-datadir") == 0) {
                 get_next_word(s, sizeof(s));
@@ -607,22 +586,22 @@ bool parse_cmd_line(int argc, char **argv)
             else if (strcasecmp(s, "-serversend") == 0) {
                 net_server_send();
             } else if (strcasecmp(s, "-nosound") == 0) {
-                set_sound_enabled_status(false);
+                sound::set_enabled_status(false);
                 printline("Disabling sound...");
             } else if (strcasecmp(s, "-sound_buffer") == 0) {
                 get_next_word(s, sizeof(s));
                 Uint16 sbsize = (Uint16)atoi(s);
-                set_soundbuf_size(sbsize);
+                sound::set_buf_size(sbsize);
                 sprintf(s, "Setting sound buffer size to %d", sbsize);
                 printline(s);
             } else if (strcasecmp(s, "-volume_vldp") == 0) {
                 get_next_word(s, sizeof(s));
                 unsigned int uVolume = atoi(s);
-                set_soundchip_vldp_volume(uVolume);
+                sound::set_chip_vldp_volume(uVolume);
             } else if (strcasecmp(s, "-volume_nonvldp") == 0) {
                 get_next_word(s, sizeof(s));
                 unsigned int uVolume = atoi(s);
-                set_soundchip_nonvldp_volume(uVolume);
+                sound::set_chip_nonvldp_volume(uVolume);
             } else if (strcasecmp(s, "-nocrc") == 0) {
                 g_game->disable_crc();
                 printline("Disabling ROM CRC check...");
@@ -636,18 +615,6 @@ bool parse_cmd_line(int argc, char **argv)
                 unsigned int u = (unsigned int)numstr::ToUint32(s, 16);
                 set_scoreboard_port(u);
                 sprintf(s, "Setting scoreboard port to %x", u);
-                printline(s);
-            } else if (strcasecmp(s, "-port") == 0) {
-                get_next_word(s, sizeof(s));
-                i = atoi(s);
-                set_serial_port((unsigned char)i);
-                sprintf(s, "Setting serial port to %d", i);
-                printline(s);
-            } else if (strcasecmp(s, "-baud") == 0) {
-                get_next_word(s, sizeof(s));
-                i = atoi(s);
-                set_baud_rate(i);
-                sprintf(s, "Setting baud rate to %d", i);
                 printline(s);
             }
 
@@ -709,17 +676,17 @@ bool parse_cmd_line(int argc, char **argv)
 
             // don't force 4:3 aspect ratio regardless of window size
             else if (strcasecmp(s, "-ignore_aspect_ratio") == 0) {
-                set_force_aspect_ratio(false);
+                video::set_force_aspect_ratio(false);
             }
 
-            // run daphne in fullscreen mode
+            // run hypseus in fullscreen mode
             else if (strcasecmp(s, "-fullscreen") == 0) {
-                set_fullscreen(true);
+                video::set_fullscreen(true);
             }
 
             // disable log file
             else if (strcasecmp(s, "-nolog") == 0) {
-                log_was_disabled = true;
+                set_log_was_disabled(true);
             }
 
             // by RDG2010
@@ -733,34 +700,34 @@ bool parse_cmd_line(int argc, char **argv)
                 i = atoi(s);
                 sprintf(s, "Scaling image by %d%%", i);
                 printline(s);
-                set_scalefactor((Uint16)i);
+		video::set_scalefactor((Uint16)i);
             }
 
             else if (strcasecmp(s, "-pal_dl") == 0) {
                 set_frame_modifier(MOD_PAL_DL);
-                printline("Setting DAPHNE up for the PAL Dragon's Lair disc");
-                cpu_change_irq(0, 0,
+                printline("Setting up for the PAL Dragon's Lair disc");
+                cpu::change_irq(0, 0,
                                LAIR_IRQ_PERIOD * (23.976 / 25.0)); // change IRQ
                                                                    // 0 of CPU 0
                 // DL PAL runs at a different speed so we need to overclock the
                 // IRQ slightly
             } else if (strcasecmp(s, "-pal_sa") == 0) {
                 set_frame_modifier(MOD_PAL_SA);
-                printline("Setting DAPHNE up for the PAL Space Ace disc");
+                printline("Setting up for the PAL Space Ace disc");
             } else if (strcasecmp(s, "-pal_dl_sc") == 0) {
                 set_frame_modifier(MOD_PAL_DL_SC);
-                printline("Setting DAPHNE up for the PAL Dragon's Lair "
+                printline("Setting up for the PAL Dragon's Lair "
                           "Software Corner disc");
-                cpu_change_irq(0, 0, LAIR_IRQ_PERIOD * (23.976 / 25.0));
+                cpu::change_irq(0, 0, LAIR_IRQ_PERIOD * (23.976 / 25.0));
                 // DL Amiga runs at a different speed so we need to overclock
                 // the IRQ slightly
             } else if (strcasecmp(s, "-pal_sa_sc") == 0) {
                 set_frame_modifier(MOD_PAL_SA_SC);
-                printline("Setting DAPHNE up for the PAL Space Ace Software "
+                printline("Setting up for the PAL Space Ace Software "
                           "Corner disc");
             } else if (strcasecmp(s, "-spaceace91") == 0) {
                 set_frame_modifier(MOD_SA91);
-                printline("Setting DAPHNE to play a Space Ace '91 disc");
+                printline("Setting to play a Space Ace '91 disc");
             } else if (strcasecmp(s, "-preset") == 0) {
                 get_next_word(s, sizeof(s));
                 i = atoi(s);
@@ -768,11 +735,11 @@ bool parse_cmd_line(int argc, char **argv)
             } else if (strcasecmp(s, "-rotate") == 0) {
                 get_next_word(s, sizeof(s));
                 float f = (float)numstr::ToDouble(s);
-                set_rotate_degrees(f);
+                video::set_rotate_degrees(f);
             }
 
             // continuously updates SRAM (after every seek)
-            // ensures sram is saved even if Daphne is terminated improperly
+            // ensures sram is saved even if Hypseus is terminated improperly
             else if (strcasecmp(s, "-sram_continuous_update") == 0) {
                 g_ldp->set_sram_continuous_update(true);
             }
@@ -784,21 +751,21 @@ bool parse_cmd_line(int argc, char **argv)
             } else if (strcasecmp(s, "-x") == 0) {
                 get_next_word(s, sizeof(s));
                 i = atoi(s);
-                set_video_width((Uint16)i);
+                video::set_video_width((Uint16)i);
                 sprintf(s, "Setting screen width to %d", i);
                 printline(s);
             } else if (strcasecmp(s, "-y") == 0) {
                 get_next_word(s, sizeof(s));
                 i = atoi(s);
-                set_video_height((Uint16)i);
+                video::set_video_height((Uint16)i);
                 sprintf(s, "Setting screen height to %d", i);
                 printline(s);
             } else if (strcasecmp(s, "-trace") == 0) {
 #ifdef CPU_DEBUG
                 printline("CPU tracing enabled");
-                set_cpu_trace(1);
+                cpu::set_trace(1);
 #else
-                printline("DAPHNE needs to be compiled in debug mode for this "
+                printline("Needs to be compiled in debug mode for this "
                           "to work");
                 result = false;
 #endif
@@ -833,13 +800,13 @@ bool parse_cmd_line(int argc, char **argv)
                 // make sure that if we read 0 as the argument, that it is
                 // really zero.. :)
                 if (((i == 0) && (s[0] == '0')) || (i != 0)) {
-                    set_sboverlay_characterset(i);
+                    video::set_sboverlay_characterset(i);
 
                     lair *game_lair_or_sa = dynamic_cast<lair *>(g_game);
                     thayers *game_thayers = dynamic_cast<thayers *>(g_game);
 
-                    // print a warning instead of an error to make daphne more
-                    // friendly to non-daphneloader frontends
+                    // print a warning instead of an error to make hypseus more
+                    // friendly to non-hypseusloader frontends
                     if (NULL == game_lair_or_sa && NULL == game_thayers) {
                         printline("WARNING: -useoverlaysb is not supported for "
                                   "this game and will be ignored");
@@ -851,9 +818,8 @@ bool parse_cmd_line(int argc, char **argv)
                             game_thayers->init_overlay_scoreboard();
                     }
                 } else {
-                    outstr("-useoverlaysb requires an argument such as 0 or 1 "
-                           "after it. Instead, found: ");
-                    printline(s);
+                    printline("-useoverlaysb requires an argument such as 0 or 1 "
+                           "after it. Instead, found: %s", s);
                     result = false;
                 }
             }
@@ -882,7 +848,7 @@ bool parse_cmd_line(int argc, char **argv)
             }
 
             // Scale the game overlay graphics to the virtual screen dimension
-            // this is needed when Daphne is used for overlaying game graphics
+            // this is needed when Hypseus is used for overlaying game graphics
             // over the real
             // laserdisc movie (using a video genlock), and the screen dimension
             // is different
@@ -900,6 +866,10 @@ bool parse_cmd_line(int argc, char **argv)
                 }
             }
 
+            // check if we need to use the SDL software renderer
+            else if (strcasecmp(s, "-sdl_software_rendering") == 0) {
+                g_game->m_sdl_software_rendering = true;
+            }
             // check for any game-specific arguments ...
             else if (g_game->handle_cmdline_arg(s)) {
                 // don't do anything in here, it has already been handled by the
@@ -920,21 +890,6 @@ bool parse_cmd_line(int argc, char **argv)
     // if game or ldp was unknown
     else {
         result = false;
-    }
-
-    // if we didn't receive "-nolog" while parsing, then it's ok to enable the
-    // log file now.
-    if (!log_was_disabled) {
-        // first we need to delete the old logfile so we can start fresh
-        // (this is the best place to do it since up until this point we don't
-        // know where our homedir is)
-        string logfile = g_homedir.get_homedir();
-        logfile += "/";
-        logfile += LOGNAME;
-        unlink(logfile.c_str()); // delete logfile if possible, because we're
-                                 // starting over
-
-        set_log_enabled(true);
     }
 
     return (result);

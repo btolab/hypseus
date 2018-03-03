@@ -1,5 +1,5 @@
 /*
- * esh.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -33,13 +33,9 @@
 
 #include "config.h"
 
-#ifdef _MSC_VER
-// disable "unreferenced inline function has been removed" warning
-#pragma warning(disable : 4514)
-#endif
-
 #include <string.h>
 #include <math.h> // for pow
+#include <plog/Log.h>
 #include "esh.h"
 #include "../cpu/cpu.h"
 #include "../cpu/generic_z80.h"
@@ -55,10 +51,10 @@ enum { S_ESH_BEEP };
 
 esh::esh() : m_needlineblink(false), m_needcharblink(false)
 {
-    struct cpudef cpu;
+    struct cpu::def cpu;
 
     m_shortgamename = "esh";
-    memset(&cpu, 0, sizeof(struct cpudef));
+    memset(&cpu, 0, sizeof(struct cpu::def));
     memset(banks, 0xFF, 4); // fill banks with 0xFF's
 
     // assuming we won't have any nvram saved, set these values.
@@ -73,7 +69,7 @@ esh::esh() : m_needlineblink(false), m_needcharblink(false)
     m_video_overlay_height = ESH_OVERLAY_H;
     m_palette_color_count  = ESH_COLOR_COUNT;
 
-    cpu.type = CPU_Z80;
+    cpu.type = cpu::type::Z80;
     cpu.hz   = 3072000; // PCB has 18.432 MHz crystal,
     // Pac-Man uses same xtal and divides by 6 for CPU clock,
     // so we'll use that here too
@@ -83,7 +79,7 @@ esh::esh() : m_needlineblink(false), m_needcharblink(false)
                                              // (likely guess)
     cpu.irq_period[0] = (1000.0 / 60.0);     // irq from vblank (guess)
     cpu.mem = m_cpumem;
-    add_cpu(&cpu); // add z80 cpu
+    cpu::add(&cpu); // add z80 cpu
 
     blank_count      = 0;
     palette_high_bit = 0;
@@ -166,7 +162,7 @@ void esh::set_version(int version)
              {NULL}};
         m_rom_list = roms;
     } else {
-        printline("ESH:  Unsupported -version paramter, ignoring...");
+        LOGW << "Unsupported -version paramter, ignoring...";
     }
 }
 
@@ -243,7 +239,7 @@ void esh::do_irq(unsigned int which_irq)
             m_video_overlay_needs_update = true;
         }
 
-        video_blit();
+        blit();
         blank_count++;
         if (blank_count >= 10) {
             blank_count = 0;
@@ -270,7 +266,6 @@ void esh::cpu_mem_write(Uint16 addr, Uint8 value)
 
 Uint8 esh::port_read(Uint16 port)
 {
-    char s[81];
     Uint8 result = 0;
 
     switch (port & 0xFF) {
@@ -287,13 +282,12 @@ Uint8 esh::port_read(Uint16 port)
         result = 0xff;
         break;
     case 0xF4:
-        result = read_ldv1000();
+        result = ldv1000::read();
         //		sprintf(s, "%x read from LDV1000", result);
         //		printline(s);
         break;
     default:
-        sprintf(s, "Port %x being read at PC %x\n", port & 0xFF, Z80_GET_PC);
-        printline(s);
+        LOGD << fmt("Port %x being read at PC %x\n", port & 0xFF, Z80_GET_PC);
         break;
     }
 
@@ -302,7 +296,6 @@ Uint8 esh::port_read(Uint16 port)
 
 void esh::port_write(Uint16 port, Uint8 value)
 {
-    char s[81];
     static unsigned int lastbeep = 0;
 
     //	static Uint8 lastmode=1;  //invalid default to guarantee screen updates
@@ -312,7 +305,7 @@ void esh::port_write(Uint16 port, Uint8 value)
     case 0xF4:
         //		sprintf(s, "%x written to LDV1000", value);
         //		printline(s);
-        write_ldv1000(value);
+        ldv1000::write(value);
         break;
     case 0xF5:
         // bit 0 - Unknown
@@ -330,7 +323,7 @@ void esh::port_write(Uint16 port, Uint8 value)
             // again
             if (++lastbeep > 61) {
                 lastbeep = 0;
-                sound_play(S_ESH_BEEP); // 1 sec. simulated beep, until the real
+                sound::play(S_ESH_BEEP); // 1 sec. simulated beep, until the real
                                         // beep is sampled
             }
         }
@@ -356,9 +349,7 @@ void esh::port_write(Uint16 port, Uint8 value)
         // turns on action button lights?
         break;
     default:
-        sprintf(s, "Port %x being written at PC %x with a value of %x",
-                port & 0xFF, Z80_GET_PC, value);
-        printline(s);
+        LOGD << fmt("Port %x being written at PC %x with a value of %x", port & 0xFF, Z80_GET_PC, value);
         break;
     }
 }
@@ -397,20 +388,20 @@ void esh::palette_calculate()
         temp_color.b =
             (Uint8)(255 * pow((static_cast<double>(temp_color.b)) / 255, 1 / ESH_GAMMA));
 
-        palette_set_color(i, temp_color);
+        palette::set_color(i, temp_color);
 
         // more than color 0 should be transparent, and until someone figures
         // out exactly what the other
         //  color is (surrounding the overlay), then all black will be
         //  transparent, which doesn't hurt anything
         if ((temp_color.r == 0) && (temp_color.g == 0) && (temp_color.b == 0)) {
-            palette_set_transparency(i, true);
+            palette::set_transparency(i, true);
         }
     }
 }
 
 // updates esh's video
-void esh::video_repaint()
+void esh::repaint()
 {
     m_needcharblink = false;
     m_needlineblink = false;
@@ -519,7 +510,7 @@ void esh::patch_roms()
         m_cpumem[0xCBC] = 0; // NOP out code that decrements # of remaning lives
         m_cpumem[0xCBD] = 0x18; // change branch if we're not out of lives to
                                 // unconditional branch
-        printline("Esh infinite lives cheat enabled!");
+        LOGI << "Esh infinite lives cheat enabled!";
     }
 }
 
@@ -559,7 +550,7 @@ void esh::input_enable(Uint8 move)
         banks[0] &= ~0x10;
         break;
     default:
-        printline("Error, bug in move enable");
+        LOGW << "bug in move enable";
         break;
     }
 }
@@ -601,7 +592,7 @@ void esh::input_disable(Uint8 move)
         banks[0] |= 0x10;
         break;
     default:
-        printline("Error, bug in move disable");
+        LOGW << "bug in move disable";
         break;
     }
 }

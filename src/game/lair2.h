@@ -1,5 +1,5 @@
 /*
- * lair2.h
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Paul Blagay
  *
@@ -87,7 +87,7 @@ class lair2 : public game
     bool handle_cmdline_arg(const char *arg);
     void patch_roms();
     void ldp_fill_buf(); // gets our ldp info and fills DL2 buffer
-    void video_repaint();
+    void repaint();
     void EEPROM_9536_write(Uint8 value);
 
   protected:
@@ -102,7 +102,6 @@ class lair2 : public game
 
     bool m_serial_int_enabled; // whether serial port should generate interrupts
 
-    bool m_real_1450;      // whether they have a real LDP-1450 or not
     bool m_sample_trigger; // for triggering our samples
 
     // If we're going to try to write directly to memory to give the ROM the

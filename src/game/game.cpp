@@ -1,5 +1,5 @@
 /*
- * game.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -25,20 +25,10 @@
 
 #include "config.h"
 
-#ifdef _MSC_VER
-#pragma warning(disable : 4100) // disable warning about unreferenced parameter
-
-// this doesn't disable the warnings I want disabled :(
-#pragma warning(disable : 4244) // disable stupid warnings in MSVC's include
-                                // files
-#pragma warning(disable : 4511)
-#pragma warning(disable : 4512)
-#pragma warning(disable : 4663)
-#endif
-
 #include <zlib.h>      // for CRC checking
 #include <string>      // STL strings, useful to prevent buffer overrun
-#include "../daphne.h" // for get_quitflag()
+#include <plog/Log.h>
+#include "../hypseus.h" // for get_quitflag()
 #include "../io/homedir.h"
 #include "../io/conout.h"
 #include "../io/error.h"
@@ -51,7 +41,6 @@
 #include "../timer/timer.h"
 #include "../io/input.h"
 #include "../io/sram.h"
-#include "../io/logger_console.h" // for writing to daphne_log.txt file
 #include "../video/video.h"       // for get_screen
 #include "../video/palette.h"
 #include "game.h"
@@ -78,10 +67,10 @@ void g_cpu_break(char *s)
     }
 
 #ifdef CPU_DEBUG
-    set_cpu_trace(1);
+    cpu::set_trace(1);
 #else
-    printline(
-        "You have to compile with CPU_DEBUG defined to use the debugger!");
+    LOGW << 
+        "You have to compile withcpu::type::DEBUG defined to use the debugger!";
 #endif
 }
 
@@ -141,13 +130,12 @@ game::game()
     m_prefer_samples = false; // default to emulated sound
     m_fastboot       = false;
 
-    m_pLogger = ConsoleLogger::GetInstance();
+    // switch to SDL software rendering if hardware acceleration is troublesome
+    m_sdl_software_rendering = false;
 }
 
 game::~game()
 {
-    // cleanup logger
-    m_pLogger->DeleteInstance();
 }
 
 // call this instead of init() directly to ensure that some universal stuff gets
@@ -185,13 +173,13 @@ bool game::init()
 {
     bool result = true;
 
-    cpu_init();
+    cpu::init();
     return result;
 }
 
 // generic game start function.  Starts the game playing (usually just begins
 // executing the cpu(s) )
-void game::start() { cpu_execute(); }
+void game::start() { cpu::execute(); }
 
 // call this instead of shutdown directly
 void game::pre_shutdown()
@@ -218,10 +206,10 @@ void game::save_sram()
 }
 
 // generic game shutdown function
-void game::shutdown() { cpu_shutdown(); }
+void game::shutdown() { cpu::shutdown(); }
 
 // generic game reset function
-void game::reset() { cpu_reset(); }
+void game::reset() { cpu::reset(); }
 
 // does anything special needed to send an IRQ
 void game::do_irq(unsigned int which_irq)
@@ -230,15 +218,15 @@ void game::do_irq(unsigned int which_irq)
     if (which_irq) {
     }
 
-    printline("WARNING : Unhandled IRQ in generic game class!  This is "
-              "probably not what you want!");
+    LOGW << "Unhandled IRQ in generic game class!  This is "
+                    "probably not what you want!";
 }
 
 // does anything special needed to send an NMI
 void game::do_nmi()
 {
-    printline("WARNING : Unhandled NMI in generic game class!  This is "
-              "probably not what you want!");
+    LOGW << "Unhandled NMI in generic game class!  This is "
+                    "probably not what you want!";
 }
 
 // reads a byte from a 16-bit address space
@@ -256,27 +244,18 @@ void game::cpu_mem_write(Uint32 addr, Uint8 value) { m_cpumem[addr] = value; }
 // reads a byte from the cpu's port
 Uint8 game::port_read(Uint16 port)
 {
-    char s[81] = {0};
-
     port &= 0xFF;
-    sprintf(s, "ERROR: CPU port %x read requested, but this function is "
-               "unimplemented!",
-            port);
-    printline(s);
-
+    LOGW << fmt("CPU port %x read requested, but this function is "
+                  "unimplemented!", port);
     return (0);
 }
 
 // writes a byte to the cpu's port
 void game::port_write(Uint16 port, Uint8 value)
 {
-    char s[81] = {0};
-
     port &= 0xFF;
-    sprintf(s, "ERROR: CPU port %x write requested (value %x) but this "
-               "function is unimplemented!",
-            port, value);
-    printline(s);
+    LOGW << fmt("CPU port %x write requested (value %x) but this "
+                  "function is unimplemented!", port, value);
 }
 
 // notifies us of the new Program Counter (which most games usually don't care
@@ -294,7 +273,7 @@ void game::input_enable(Uint8 input)
     if (input) {
     }
 
-    printline("Warning: generic input_enable function called, does nothing");
+    LOGW << "generic input_enable function called, does nothing";
 }
 
 void game::input_disable(Uint8 input)
@@ -303,7 +282,7 @@ void game::input_disable(Uint8 input)
     if (input) {
     }
 
-    printline("Warning: generic input_disable function called, does nothing");
+    LOGW << "generic input_disable function called, does nothing";
 }
 
 // Added by ScottD
@@ -313,7 +292,7 @@ void game::OnMouseMotion(Uint16 x, Uint16 y, Sint16 xrel, Sint16 yrel)
     if (x || y || xrel || yrel) {
     }
 
-    printline("Warning: generic mouse_motion function called, does nothing");
+    LOGW << "generic mouse_motion function called, does nothing";
 }
 
 // by default, this is ignored, but it should be used by specific game drivers
@@ -332,7 +311,7 @@ void game::OnLDV1000LineChange(bool bIsStatus, bool bIsEnabled)
 // It is good to use generic video init and shutdown functions because then we
 // minimize the possibility of errors such as forgetting to call
 // palette_shutdown
-bool game::video_init()
+bool game::init_video()
 {
     bool result = false;
     int index   = 0;
@@ -345,10 +324,12 @@ bool game::video_init()
     float srcx;
     float srcy;
 
+    // Set up SDL display (create window, renderer, surfaces, textures...)
+    video::init_display();
     // set instance variables and local variables to the actual screen (or
     // window) dimension
-    m_video_screen_width = w = get_screen_blitter()->w;
-    m_video_screen_height = h = get_screen_blitter()->h;
+    m_video_screen_width = w = video::get_screen_blitter()->w;
+    m_video_screen_height = h = video::get_screen_blitter()->h;
 
     // if this particular game uses video overlay (most do)
     if (m_game_uses_video_overlay) {
@@ -378,7 +359,7 @@ bool game::video_init()
                 // pixmap
                 if ((m_video_overlay_matrix =
                          (long *)MPO_MALLOC(sizeof(long) * w * h)) == NULL) {
-                    printline("MEM ERROR : malloc failed in video_init!");
+                    LOGW << "MEM ERROR : malloc failed in init_video!";
                     return false;
                 } /*endif*/
 
@@ -407,8 +388,7 @@ bool game::video_init()
 
                 // check to see if we got an error (this should never happen)
                 if (!m_video_overlay[index]) {
-                    printline("ODD ERROR : SDL_CreateRGBSurface failed in "
-                              "video_init!");
+                    LOGW << "ODD ERROR : SDL_CreateRGBSurface failed in init_video!";
                     result = false;
                 }
             }
@@ -416,10 +396,10 @@ bool game::video_init()
             // if we created the surfaces alright, then allocate space for the
             // color palette
             if (result) {
-                result = palette_initialize(m_palette_color_count);
+                result = palette::initialize(m_palette_color_count);
                 if (result) {
                     palette_calculate();
-                    palette_finalize();
+                    palette::finalize();
                 }
             }
         } // end if video overlay is used
@@ -427,8 +407,8 @@ bool game::video_init()
         // if the game has not explicitely specified those variables that we
         // need ...
         else {
-            printerror("See video_init() inside game.cpp for what you need to "
-                       "do to fix a problem");
+            LOGW << "See init_video() inside game.cpp for what you need to "
+                       "do to fix a problem";
             // If your game doesn't use video overlay, set
             // m_game_uses_video_overlay to false ...
         }
@@ -443,15 +423,15 @@ bool game::video_init()
 }
 
 // shuts down any video we might have initialized
-void game::video_shutdown()
+void game::shutdown_video()
 {
     int index = 0;
 
-    palette_shutdown(); // de-allocate memory in color palette routines
+    palette::shutdown(); // de-allocate memory in color palette routines
 
     for (index = 0; index < m_video_overlay_count; index++) {
         // only free surface if it has been allocated (if we get an error in
-        // video_init, some surfaces may not be allocated)
+        // init_video, some surfaces may not be allocated)
         if (m_video_overlay[index] != NULL) {
             SDL_FreeSurface(m_video_overlay[index]);
             m_video_overlay[index] = NULL;
@@ -485,63 +465,50 @@ void Scale(SDL_Surface *src, SDL_Surface *dst, long *matrix)
 // end-add
 
 // generic function to ensure that the video buffer gets drawn to the screen,
-// will call video_repaint()
-void game::video_blit()
+// will call repaint()
+void game::blit()
 {
-    // if something has actually changed in the game's video (video_blit() will
+    // if something has actually changed in the game's video, blit() will
     // probably get called regularly on each screen refresh,
-    // and we don't want to call the potentially expensive video_repaint()
-    // unless we have to)
-    //if (m_video_overlay_needs_update) {
-    //    m_active_video_overlay++; // move to the next video buffer (in case we
-    //                              // are supporting more than one buffer)
+    // and we don't want to call the potentially expensive repaint()
+    // unless we have to.
+    if (m_video_overlay_needs_update) {
+        m_active_video_overlay++; // move to the next video buffer (in case we
+                                  // are supporting more than one buffer)
 
-    //    // check for wraparound ... (the count will be the last index+1, which
-    //    // is why we do >= instead of >)
-    //    if (m_active_video_overlay >= m_video_overlay_count) {
-    //        m_active_video_overlay = 0;
-    //    }
-        video_repaint(); // call game-specific function to get palette refreshed
-    //    m_video_overlay_needs_update =
-    //        false; // game will need to set this value to true next time it
-    //               // becomes needful for us to redraw the screen
+        // check for wraparound ... (the count will be the last index+1, which
+        // is why we do >= instead of >)
+        if (m_active_video_overlay >= m_video_overlay_count) {
+            m_active_video_overlay = 0;
+        }
+        repaint(); // call game-specific function to get palette refreshed
+        m_video_overlay_needs_update =
+            false; // game will need to set this value to true next time it
+                   // becomes needful for us to redraw the screen
 
-    //    // if we are in non-VLDP mode, then we can blit to the main surface
-    //    // right here,
-    //    // otherwise we do nothing because the yuv_callback in ldp-vldp.cpp will
-    //    // take care of it
-    //    if (!g_ldp->is_vldp()) {
-    //            // If we're not scaling the video
-    //            if (!m_bFullScale) {
-    //                vid_blit(m_video_overlay[m_active_video_overlay], 0, 0);
-    //            } else {
-    //                // scale game graphics to the screen dimensions
-    //                Scale(m_video_overlay[m_active_video_overlay],
-    //                      m_video_overlay_scaled, m_video_overlay_matrix);
-    //                vid_blit(m_video_overlay_scaled, 0, 0);
-    //            } /*endelse*/
-    //        vid_flip();
-    //    } // end if this isn't VLDP
-
-    //    m_finished_video_overlay = m_active_video_overlay;
-    //}
+        // MAC: No software scaling to be done on SDL2, so we just update the texture here,
+        // and SDL_RenderCopy() will hw-scale for us.
+        video::vid_update_overlay_surface(m_video_overlay[m_active_video_overlay], 0, 0);
+        m_finished_video_overlay = m_active_video_overlay;
+    }
+    video::vid_blit();
 }
 
 // forces the video overlay to be redrawn to the screen
 // This is necessary when the screen has been clobbered (such as when the debug
 // console is down)
-void game::video_force_blit()
+void game::force_blit()
 {
-    // if the game uses a video overlay, we have to go through this video_blit
+    // if the game uses a video overlay, we have to go through this blit
     // routine to update a bunch of variables
     if (m_game_uses_video_overlay) {
         m_video_overlay_needs_update = true;
-        video_blit();
+        blit();
     }
 
-    // otherwise we can just call video repaint directly
+    // otherwise we can just call repaint directly
     else {
-        video_repaint();
+        repaint();
     }
 }
 
@@ -555,14 +522,14 @@ void game::palette_calculate()
         temp_color.r = (unsigned char)i;
         temp_color.g = (unsigned char)i;
         temp_color.b = (unsigned char)i;
-        palette_set_color(i, temp_color);
+        palette::set_color(i, temp_color);
     }
 }
 
 // redraws the current active video overlay buffer (but doesn't blit anything to
 // the screen)
 // This is a game-specific function
-void game::video_repaint() {}
+void game::repaint() {}
 
 void game::set_video_overlay_needs_update(bool value)
 {
@@ -580,15 +547,15 @@ void game::set_fastboot(bool value) { m_fastboot = value; }
 // generic preset function, does nothing
 void game::set_preset(int preset)
 {
-    printline(
-        "NOTE: There are no presets defined for the game you have chosen!");
+    LOGI <<
+        "There are no presets defined for the game you have chosen!";
 }
 
 // generic version function, does nothing
 void game::set_version(int version)
 {
-    printline("NOTE: There are no alternate versions defined for the game you "
-              "have chosen!");
+    LOGI << "There are no alternate versions defined for the game you "
+                 "have chosen!";
 }
 
 // returns false if there was an error trying to set the bank value (ie if the
@@ -598,8 +565,8 @@ bool game::set_bank(unsigned char which_bank, unsigned char value)
     bool result = false; // give them an error to help them troubleshoot any
                          // problem they are having with their command line
 
-    printline(
-        "ERROR: The ability to set bank values is not supported in this game.");
+    LOGW <<
+        "ERROR: The ability to set bank values is not supported in this game.";
 
     return result;
 }
@@ -707,8 +674,7 @@ bool game::load_roms()
                         sprintf(s, "ROM CRC checked failed for %s, expected "
                                    "%x, got %x",
                                 rom->filename, rom->crc32, crc);
-                        printerror(s); // warn them about this disaster :)
-                        printline(s);
+                        LOGW << s;
                     }
                 }
             }
@@ -721,7 +687,7 @@ bool game::load_roms()
                 s += path;
                 s += "/, or in ";
                 s += zip_path;
-                printerror(s.c_str());
+		LOGW << s;
                 // if this game borrows roms from another game, point that out
                 // to the user to help
                 // them troubleshoot
@@ -729,12 +695,12 @@ bool game::load_roms()
                     s = "NOTE : this ROM comes from the folder '";
                     s += rom->dir;
                     s += "', which belongs to another game.";
-                    printline(s.c_str());
+                    LOGW << s;
                     s = "You also NEED to get the ROMs for the game that uses "
                         "the directory '";
                     s += rom->dir;
                     s += "'.";
-                    printline(s.c_str());
+                    LOGW << s;
                 }
             }
 
@@ -832,11 +798,7 @@ bool game::load_rom(const char *filename, Uint8 *buf, Uint32 size)
     bool result               = false;
     string fullpath           = g_homedir.get_romfile(filename); // pathname to roms
                                                                  // directory
-    string s = "";
-
-    outstr("Loading ");
-    outstr(fullpath.c_str());
-    outstr(" ... ");
+    string s = "Loading " + fullpath + " ... ";
 
     F = mpo_open(fullpath.c_str(), MPO_OPEN_READONLY);
 
@@ -850,15 +812,14 @@ bool game::load_rom(const char *filename, Uint8 *buf, Uint32 size)
         }
         // notify the user what the problem is
         else {
-            s = "error in rom_load: expected " + numstr::ToStr(size) +
+            s += "error in rom_load: expected " + numstr::ToStr(size) +
                 " but only read " + numstr::ToStr((unsigned int)bytes_read);
-            printline(s.c_str());
         }
         mpo_close(F);
     }
 
-    s = numstr::ToStr((unsigned int)bytes_read) + " bytes read into memory";
-    printline(s.c_str());
+    s += numstr::ToStr((unsigned int)bytes_read) + " bytes read into memory";
+    LOGI << s;
 
     return (result);
 }
@@ -880,9 +841,9 @@ bool game::load_compressed_rom(const char *filename, unzFile opened_zip_file,
 {
     bool result = false;
 
-    outstr("Loading compressed ROM image ");
-    outstr(filename);
-    outstr("...");
+    string s = "Loading compressed ROM image ";
+    s.append(filename);
+    s += " ... ";
 
     // try to locate requested rom file inside .ZIP archive and proceed if
     // successful
@@ -896,18 +857,22 @@ bool game::load_compressed_rom(const char *filename, unzFile opened_zip_file,
 
             // if we read what we expected to read ...
             if (bytes_read == size) {
-                char s[81];
-                sprintf(s, "%d bytes read.", bytes_read);
-                printline(s);
+                s += numstr::ToStr(bytes_read) + " bytes read.";
                 result = true;
             } else {
-                printline("unexpected read result!");
+                s += "unexpected read result!";
             }
         } else {
-            printline("could not open current file!");
+            s += "could not open current file!";
         }
     } else {
-        printline("file not found in .ZIP archive!");
+        s += "file not found in .ZIP archive!";
+    }
+
+    if (result) {
+    	LOGI << s;
+    } else {
+        LOGW << s;
     }
 
     return result;
@@ -995,7 +960,7 @@ void game::toggle_game_pause()
 {
     // if the game is already paused ...
     if (m_game_paused) {
-        cpu_unpause();
+        cpu::unpause();
         g_ldp->pre_play();
         m_game_paused = false;
     }
@@ -1005,7 +970,7 @@ void game::toggle_game_pause()
         //		char frame[6];
         //		Uint16 cur_frame = g_ldp->get_current_frame();
 
-        cpu_pause();
+        cpu::pause();
         g_ldp->pre_pause();
 
         // If seek delay is enabled, we can't search here because the seek delay
@@ -1017,7 +982,7 @@ void game::toggle_game_pause()
         think we're on (not the frame we're actually on)
 
         // wait for seek to complete
-        // (using non-blocking seeking to avoid an extra cpu_pause)
+        // (using non-blocking seeking to avoid an extra cpu::pause)
         while (g_ldp->get_status() == LDP_SEARCHING)
         {
             make_delay(1);
@@ -1056,6 +1021,10 @@ const char *game::get_address_name(unsigned int addr)
     return (name);
 }
 
-#endif // CPU_DEBUG
+#endif //cpu::type::DEBUG
 
 bool game::getMouseEnabled() { return m_bMouseEnabled; }
+
+bool game::getGameNeedsOverlayUpdate() { return m_video_overlay_needs_update; }
+
+void game::setGameNeedsOverlayUpdate(bool val) { m_video_overlay_needs_update = val; }

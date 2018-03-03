@@ -1,5 +1,5 @@
 /*
- * tms9128nl.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -25,41 +25,31 @@
 // undefine this to get rid of debug messages, or 1 to view them
 //#define TMS_DEBUG 1
 
-#include <SDL.h>
-#include "SDL_FontCache.h"
-#include "tms9128nl.h"
-#include "palette.h"
-#include "video.h"
 #include "../game/game.h"
 #include "../io/conout.h"
 #include "../ldp-out/ldp.h" // to check to see if blitting is allowed
+#include "SDL_FontCache.h"
+#include "palette.h"
+#include "tms9128nl.h"
+#include "video.h"
+#include <SDL.h>
+#include <plog/Log.h>
 #include <stdio.h>
 #include <string.h>
 
-static unsigned char g_vidbuf[TMS9128NL_OVERLAY_W * TMS9128NL_OVERLAY_H]; // video
-                                                                          // buffer
-                                                                          // needed
-                                                                          // because
-                                                                          // we
-                                                                          // clobber
-                                                                          // the
-                                                                          // SDL_Surface
-                                                                          // buffer
-                                                                          // when
-                                                                          // we
-                                                                          // do
-                                                                          // real-time
-                                                                          // scaling
+// video buffer needed because we clobber the SDL_Surface buffer when we do
+// real-time scaling
+static unsigned char g_vidbuf[TMS9128NL_OVERLAY_W * TMS9128NL_OVERLAY_H];
 static unsigned char vidmem[32767] = {0}; // video memory
 static unsigned char lowbyte       = 0;
 static unsigned char highbyte      = 0;
 static unsigned int rvidindex;
 static unsigned int wvidindex;
-static int toggleflag = 0; // keep track of low / high byte
-static int g_vidmode  = 0; // keep track of video mode
-static int viddisp    = 1; // enable video display 0=off 1=on
+static int toggleflag = 0;   // keep track of low / high byte
+static int g_vidmode  = 0;   // keep track of video mode
+static int viddisp    = 1;   // enable video display 0=off 1=on
 static int vidreg[8]  = {0}; // registers 0-7
-static int rowdiv     = 40; // text mode
+static int rowdiv     = 40;  // text mode
 
 unsigned char g_tms_pnt_addr         = 0;   // pattern name table address
 unsigned char g_tms_ct_addr          = 0;   // color table address
@@ -91,7 +81,7 @@ void tms9128nl_reset()
     wvidindex  = 0;
     toggleflag = 0;
     g_vidmode  = 0;
-    viddisp = 1;
+    viddisp    = 1;
     memset(vidreg, 0, sizeof(vidreg));
     rowdiv                  = 40;
     g_tms_pnt_addr          = 0;
@@ -216,7 +206,7 @@ void tms9128nl_write_port1(unsigned char value)
                                                     // clear the overlay
                     {
 #ifdef TMS_DEBUG
-                        printline("TMS: mode 2");
+                        LOGD << "mode 2";
 #endif
                         tms9128nl_clear_overlay();
                         prevg_vidmode = g_vidmode;
@@ -225,11 +215,11 @@ void tms9128nl_write_port1(unsigned char value)
                 // if the B&W bit is set, flag an error
                 if (lowbyte & 1) {
 #ifdef TMS_DEBUG
-                    printline("TMS: B&W bit set, unsupported");
+                    LOGD << "B&W bit set, unsupported";
 #endif
                 } else {
 #ifdef TMS_DEBUG
-                    printline("TMS : B&W bit cleared");
+                    LOGD << "B&W bit cleared";
 #endif
                 }
                 break;
@@ -240,14 +230,14 @@ void tms9128nl_write_port1(unsigned char value)
                 // if bit 0 is set, MAG
                 if (lowbyte & 1) {
 #ifdef TMS_DEBUG
-                    printline("TMS: double sprite size not supported");
+                    LOGD << "double sprite size not supported";
 #endif
                 }
 
                 // if bit 1 is set, 16x16 sprites is what we use, else 8x8
                 if (lowbyte & 2) {
 #ifdef TMS_DEBUG
-                    printline("TMS: 16x16 sprites requested");
+                    LOGD << "16x16 sprites requested";
 #endif
                 } else {
 #ifdef TMS_DEBUG
@@ -264,7 +254,7 @@ void tms9128nl_write_port1(unsigned char value)
                                                     // clear the overlay
                     {
 #ifdef TMS_DEBUG
-                        printline("TMS: mode 3");
+                        LOGD << "mode 3";
 #endif
                         tms9128nl_clear_overlay();
                         prevg_vidmode = g_vidmode;
@@ -279,7 +269,7 @@ void tms9128nl_write_port1(unsigned char value)
                                                     // clear the overlay
                     {
 #ifdef TMS_DEBUG
-                        printline("TMS: mode 1");
+                        LOGD << "mode 1";
 #endif
                         tms9128nl_clear_overlay();
                         prevg_vidmode = g_vidmode;
@@ -296,7 +286,7 @@ void tms9128nl_write_port1(unsigned char value)
                                                     // clear the overlay
                     {
 #ifdef TMS_DEBUG
-                        printline("TMS: g_vidmode 0 special");
+                        LOGD << "g_vidmode 0 special";
 #endif
                         tms9128nl_clear_overlay();
                         prevg_vidmode = g_vidmode;
@@ -307,7 +297,7 @@ void tms9128nl_write_port1(unsigned char value)
 #ifdef TMS_DEBUG
                     // if they weren't previously enabled
                     if (!g_tms_interrupt_enabled) {
-                        printline("TMS: Generate interrupts enabled");
+                        LOGD << "Generate interrupts enabled";
                     }
 #endif
                     // don't print anything since this is what we expect
@@ -316,7 +306,7 @@ void tms9128nl_write_port1(unsigned char value)
 #ifdef TMS_DEBUG
                     // only notify us if they weren't already disabled
                     if (g_tms_interrupt_enabled) {
-                        printline("TMS: Generate interrupts disabled");
+                        LOGD << "Generate interrupts disabled";
                     }
 #endif
                     g_tms_interrupt_enabled = 0;
@@ -332,7 +322,7 @@ void tms9128nl_write_port1(unsigned char value)
 
                     tms9128nl_clear_overlay();
 #ifdef TMS_DEBUG
-                    printline("TMS: VIDEO DISPLAY TO BE BLANKED!");
+                    LOGD << "VIDEO DISPLAY TO BE BLANKED!";
 #endif
                 }
 
@@ -344,7 +334,7 @@ void tms9128nl_write_port1(unsigned char value)
                     // don't print anything since this is what we expect
                 } else {
 #ifdef TMS_DEBUG
-                    printline("TMS: 4k ram selected, unsupported");
+                    LOGD << "4k ram selected, unsupported";
 #endif
                 }
                 break;
@@ -356,8 +346,7 @@ void tms9128nl_write_port1(unsigned char value)
                 unsigned char temp =
                     (unsigned char)(lowbyte & 0xF); // only lowest 4 bits
                 if (temp != g_tms_pnt_addr) {
-                    sprintf(s, "TMS: Pattern Name Table Address changed to %x", g_tms_pnt_addr);
-                    printline(s);
+                    LOGD << fmt("Pattern Name Table Address changed to %x", g_tms_pnt_addr);
                 }
             }
 #endif
@@ -368,8 +357,7 @@ void tms9128nl_write_port1(unsigned char value)
             case 3:
 #ifdef TMS_DEBUG
                 if (lowbyte != g_tms_ct_addr) {
-                    sprintf(s, "TMS: Color Table Address changed to %x", g_tms_ct_addr);
-                    printline(s);
+                    LOGD << fmt("Color Table Address changed to %x", g_tms_ct_addr);
                 }
 #endif
 
@@ -382,8 +370,7 @@ void tms9128nl_write_port1(unsigned char value)
             {
                 unsigned char temp = (unsigned char)(lowbyte & 7);
                 if (temp != g_tms_pgt_addr) {
-                    sprintf(s, "TMS: Pattern Generation Table changed to %x", g_tms_pgt_addr);
-                    printline(s);
+                    LOGD << fmt("Pattern Generation Table changed to %x", g_tms_pgt_addr);
                 }
             }
 #endif
@@ -398,10 +385,7 @@ void tms9128nl_write_port1(unsigned char value)
             {
                 unsigned char temp = (unsigned char)(lowbyte & 0x7F);
                 if (temp != g_tms_sat_addr) {
-                    sprintf(s,
-                            "TMS: Sprite Attribute Table address changed to %x",
-                            g_tms_sat_addr);
-                    printline(s);
+                    LOGD << fmt("Sprite Attribute Table address changed to %x", g_tms_sat_addr);
                 }
             }
 #endif
@@ -415,10 +399,7 @@ void tms9128nl_write_port1(unsigned char value)
             {
                 unsigned char temp = (unsigned char)(lowbyte & 0x7);
                 if (temp != g_tms_sgt_addr) {
-                    sprintf(s,
-                            "TMS: Sprite Generator Table address changed to %x",
-                            g_tms_sgt_addr);
-                    printline(s);
+                    LOGD << fmt("Sprite Generator Table address changed to %x", g_tms_sgt_addr);
                 }
             }
 #endif
@@ -433,12 +414,10 @@ void tms9128nl_write_port1(unsigned char value)
                 unsigned char t1 = (unsigned char)((lowbyte & 0xF0) >> 4);
                 unsigned char t2 = (unsigned char)(lowbyte & 0x0F);
                 if (t1 != g_tms_foreground_color) {
-                    sprintf(s, "TMS : Foreground color changed to %x", g_tms_foreground_color);
-                    printline(s);
+                    LOGD << fmt("Foreground color changed to %x", g_tms_foreground_color);
                 }
                 if (t2 != g_tms_background_color) {
-                    sprintf(s, "TMS : Background color changed to %x", g_tms_background_color);
-                    printline(s);
+                    LOGD << fmt("Background color changed to %x", g_tms_background_color);
                 }
             }
 #endif
@@ -450,12 +429,11 @@ void tms9128nl_write_port1(unsigned char value)
 
             default:
 #ifdef TMS_DEBUG
-                sprintf(s, "TMS: Register %d was written to (unsupported)", which_reg);
-                printline(s);
+                LOGD << fmt("Register %d was written to (unsupported)", which_reg);
 #endif
                 break;
             } // end switch
-        } // end if bit 7 is set (and we're writing to a register)
+        }     // end if bit 7 is set (and we're writing to a register)
 
         // bit 7 is clear so we're not writing to a register
         // instead, we are modifying the video memory address
@@ -471,7 +449,7 @@ void tms9128nl_write_port1(unsigned char value)
             }
             // otherwise we're in memory read mode
             else {
-                printline("Memory read mode requested");
+                LOGD << "Memory read mode requested";
             }
 #endif
 
@@ -479,8 +457,8 @@ void tms9128nl_write_port1(unsigned char value)
             tempindex = (highbyte << 8) | lowbyte;
             wvidindex = tempindex;
             rvidindex = tempindex;
-        } // end if high bit not set
-    } // end if toggleflag is not zero
+        }                        // end if high bit not set
+    }                            // end if toggleflag is not zero
     toggleflag = toggleflag ^ 1; // flip bit 1
 }
 
@@ -498,8 +476,6 @@ void tms9128nl_write_port0(unsigned char Value)
 
 void tms9128nl_convert_color(unsigned char color_src, SDL_Color *color)
 {
-
-    char s[81] = {0};
 
     switch (color_src) {
     case 0: // transparent
@@ -594,8 +570,7 @@ void tms9128nl_convert_color(unsigned char color_src, SDL_Color *color)
         color->b = 255;
         break;
     default:
-        sprintf(s, "UNSUPPORTED COLOR passed into convert color : %d", color_src);
-        printline(s);
+        LOGW << fmt("UNSUPPORTED COLOR passed into convert color : %d", color_src);
         break;
     }
 }
@@ -729,8 +704,8 @@ void tms9128nl_outcommand(char *s, int col, int row)
 
     // VLDP freaks out if it's not the only thing drawing to the screen
     if (!g_ldp->is_vldp()) {
-        //vid_blank();
-        FC_Draw(get_font(), get_screen(), dest.x, dest.y, s);
+        // vid_blank();
+        FC_Draw(video::get_font(), video::get_renderer(), dest.x, dest.y, s);
         // TODO : get this working again under the new video scheme
     }
 }
@@ -747,8 +722,8 @@ void tms9128nl_palette_update()
     tms9128nl_convert_color(g_tms_foreground_color, &fore);
     tms9128nl_convert_color(g_tms_background_color, &back);
 
-    palette_set_color(0, back);
-    palette_set_color(255, fore);
+    palette::set_color(0, back);
+    palette::set_color(255, fore);
 
     // if we should do extra calculations for stretching
     if (g_vidmode == 2) {
@@ -758,12 +733,12 @@ void tms9128nl_palette_update()
         MIX_COLORS_75_25(fore75back25, fore, back); // 3/4, 1/4
         MIX_COLORS_50(fore5back5, fore, back);      // average
         MIX_COLORS_75_25(fore25back75, back, fore); // 1/4, 3/4
-        palette_set_color(1, fore25back75);
-        palette_set_color(2, fore5back5);
-        palette_set_color(3, fore75back25);
+        palette::set_color(1, fore25back75);
+        palette::set_color(2, fore5back5);
+        palette::set_color(3, fore75back25);
     }
 
-    palette_finalize();
+    palette::finalize();
     g_game->set_video_overlay_needs_update(true);
 }
 
@@ -775,11 +750,11 @@ void tms9128nl_palette_calculate()
     // effectively in 'noldp' mode
     SDL_Color color;
     color.r = color.g = color.b = TMS_TRANSPARENT_COLOR;
-    palette_set_transparency(0, false); // change default to non-transparent
-    palette_set_transparency(TMS_TRANSPARENT_COLOR, true); // make transparent
+    palette::set_transparency(0, false); // change default to non-transparent
+    palette::set_transparency(TMS_TRANSPARENT_COLOR, true); // make transparent
                                                            // color transparent
                                                            // :)
-    palette_set_color(TMS_TRANSPARENT_COLOR, color);
+    palette::set_color(TMS_TRANSPARENT_COLOR, color);
 
     tms9128nl_palette_update();
     tms9128nl_reset();
@@ -902,7 +877,7 @@ void tms9128nl_clear_overlay()
     Uint8 *ptr = g_vidbuf;
 
     //	printf("Overlay is being cleared, transparency is %d, latch is %d\n",
-    //g_transparency_enabled, g_transparency_latch);
+    // g_transparency_enabled, g_transparency_latch);
 
     // if transparency mode is on ...
     if (g_transparency_latch) {

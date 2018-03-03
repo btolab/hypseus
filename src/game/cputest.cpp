@@ -1,5 +1,5 @@
 /*
- * cputest.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -32,6 +32,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h> // for memset
+#include <plog/Log.h>
 #include "cputest.h"
 #include "../cpu/cpu-debug.h"
 #include "../cpu/cpu.h"
@@ -45,16 +46,16 @@
 
 cputest::cputest() : m_uZeroCount(0), m_bStarted(false)
 {
-    struct cpudef cpu; // structure we will define our cpu in
+    struct cpu::def cpu; // structure we will define our cpu in
 
     m_shortgamename = "cputest";
-    memset(&cpu, 0, sizeof(struct cpudef));
-    cpu.type              = CPU_Z80;
+    memset(&cpu, 0, sizeof(struct cpu::def));
+    cpu.type              = cpu::type::Z80;
     cpu.hz                = 2000000000; // 2000 mhz (fast as possible)!
     cpu.initial_pc        = 0x100;
     cpu.must_copy_context = false;
     cpu.mem = m_cpumem;
-    add_cpu(&cpu); // add this cpu to the list (it will be our only one)
+    cpu::add(&cpu); // add this cpu to the list (it will be our only one)
 
     m_disc_fps = 29.97; // for now this needs _some_ value for vblank purposes
 
@@ -67,13 +68,13 @@ bool cputest::init()
     bool bSuccess = false;
 
 #ifdef CPU_DEBUG
-    // this cpu test requires CPU_DEBUG to be enabled because that's the only
+    // this cpu test requirescpu::type::DEBUG to be enabled because that's the only
     // way that the update_pc callback will get called.
     bSuccess = true;
 #else
-    printline("This build was not compiled with CPU_DEBUG defined.  Recompile "
-              "with CPU_DEBUG defined in order to run the cpu tests.");
-#endif // CPU_DEBUG
+    LOGW << "This build was not compiled withcpu::type::DEBUG defined.  Recompile "
+              "withcpu::type::DEBUG defined in order to run the cpu tests.";
+#endif //cpu::type::DEBUG
 
     return bSuccess;
 }
@@ -82,10 +83,7 @@ void cputest::shutdown()
 {
     Uint32 elapsed_ms = GET_TICKS() - m_speedtimer;
 
-    string s = "Z80 cputest executed in ";
-    s += numstr::ToStr(elapsed_ms);
-    s += " ms";
-    printline(s.c_str());
+    LOGI << fmt("Z80 cputest executed in %d ms", elapsed_ms);
 }
 
 void cputest::start()
@@ -104,7 +102,7 @@ void cputest::update_pc(Uint32 new_pc)
     // this halts the tests
     if (new_pc == 0) {
         if (m_bStarted && !get_quitflag()) {
-            printline("PC went to 0 (test complete)");
+            LOGI << "PC went to 0 (test complete)";
             set_quitflag();
         }
     }
@@ -131,14 +129,14 @@ void cputest::update_pc(Uint32 new_pc)
                 i++;
             }
             s[i] = 0;     // terminate string
-            printline(s); // and print it to the console
+            LOGI << s; // and print it to the console
 
             Z80_SET_PC(new_pc); // return from call
             Z80_SET_SP(sp + 2); // pop return address off stack
         }
         // if C is 0, it means to terminate the program (I think!)
         else if (command == 0) {
-            printline("Got quit command!\n");
+            LOGI << "Got quit command!";
             set_quitflag();
         }
         // print just one character to the console
@@ -150,7 +148,7 @@ void cputest::update_pc(Uint32 new_pc)
             Z80_SET_PC(new_pc); // return from call
             Z80_SET_SP(sp + 2); // pop return address off stack
         } else {
-            printf("Warning, unknown command received at 5!\n");
+            LOGW << "unknown command received at 5!";
             set_quitflag();
         }
     }
@@ -186,7 +184,7 @@ void cputest::set_preset(int val)
         m_rom_list = branchtest_rom;
         break;
     default:
-        printline("Bad preset!");
+        LOGW << "Bad preset!";
         set_quitflag();
         break;
     } // end switch

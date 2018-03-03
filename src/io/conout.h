@@ -1,5 +1,5 @@
 /*
- * conout.h
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -26,18 +26,17 @@
 #ifndef CONOUT_H
 #define CONOUT_H
 
-#define LOGNAME "daphne_log.txt" // name of our logfile if we are using one
+#include <string>
 
-void outstr(const char *s);
+#define LOGNAME "hypseus_log.txt" // name of our logfile if we are using one
+
+std::string fmt(const std::string fmt_str, ...);
 void outchr(const char ch);
-void printline(const char *s);
-void newline();
+void printline(const char *fmt, ...);
 void noflood_printline(char *s);
 void safe_itoa(int num, char *a, int sizeof_a);
 
 // enables/disables log from being written to disk
 void set_log_enabled(bool val);
-
-void addlog(const char *s);
 
 #endif

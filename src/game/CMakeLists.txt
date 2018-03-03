@@ -66,8 +66,11 @@ if( BUILD_SINGE )
     list( APPEND LIB_HEADERS singe.h )
 endif( BUILD_SINGE )
 
+# ignore gcc: warning: promoted ~unsigned is always non-zero [-Wsign-compare] (do_nmi coin check)
+set_source_files_properties( laireuro.cpp PROPERTIES COMPILE_FLAGS -Wno-sign-compare)
+
 add_library( game ${LIB_SOURCES} ${LIB_HEADERS} )
-target_link_libraries( game sound scoreboard video io )
+target_link_libraries( game sound scoreboard video io plog )
 if( BUILD_SINGE )
     target_link_libraries( game singeproxy )
 endif( BUILD_SINGE )

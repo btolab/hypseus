@@ -1,5 +1,5 @@
 /*
-* pc_beeper.cpp
+* ____ DAPHNE COPYRIGHT NOTICE ____
 *
 * Copyright (C) 2005 Matt Ownby
 *
@@ -26,9 +26,14 @@
 #include <string.h> // for memset
 
 #ifdef DEBUG
-#include "../io/conout.h"
 #include <assert.h>
 #endif
+
+#include "../io/conout.h"
+#include <plog/Log.h>
+
+namespace beeper
+{
 
 // how many beepers have been created
 unsigned int g_uBeeperCount = 0;
@@ -60,13 +65,13 @@ unsigned int g_uSampleCount = 0;
 unsigned int g_uSamplesPerHalfCycle = 0;
 
 // init callback
-int beeper_init(Uint32 unused)
+int init(Uint32 unused)
 {
 
 #ifdef DEBUG
     // a couple of assumptions...
-    assert(AUDIO_CHANNELS == 2);
-    assert(AUDIO_BYTES_PER_SAMPLE == 4);
+    assert(sound::CHANNELS == 2);
+    assert(sound::BYTES_PER_SAMPLE == 4);
 #endif
 
     // we only support 1 beeper for the time being
@@ -82,7 +87,7 @@ int beeper_init(Uint32 unused)
 }
 
 // should be called from the game driver to control beeper
-void beeper_ctrl_data(unsigned int uPort, unsigned int uByte, int internal_id)
+void ctrl_data(unsigned int uPort, unsigned int uByte, int internal_id)
 {
     switch (uPort) {
     case 0x42: // frequency
@@ -100,11 +105,9 @@ void beeper_ctrl_data(unsigned int uPort, unsigned int uByte, int internal_id)
 
             // Compute how many samples for half a cycle
             // >> 1 because it's half a cycle (divide by 2)
-            g_uSamplesPerHalfCycle = (AUDIO_FREQ / g_uBeeperFreq) >> 1;
+            g_uSamplesPerHalfCycle = (sound::FREQ / g_uBeeperFreq) >> 1;
 #ifdef DEBUG
-            char s[320];
-            sprintf(s, "PC BEEPER : freq %u requested", g_uBeeperFreq);
-            printline(s);
+            LOGD << fmt("PC BEEPER : freq %u requested", g_uBeeperFreq);
 #endif
         }
         break;
@@ -120,20 +123,20 @@ void beeper_ctrl_data(unsigned int uPort, unsigned int uByte, int internal_id)
 }
 
 // called from sound mixer to get audio stream
-void beeper_get_stream(Uint8 *stream, int length, int internal_id)
+void get_stream(Uint8 *stream, int length, int internal_id)
 {
 #ifdef DEBUG
     // make sure this is in the proper format (stereo 16-bit)
-    assert((length % AUDIO_BYTES_PER_SAMPLE) == 0);
+    assert((length % sound::BYTES_PER_SAMPLE) == 0);
 #endif
 
     if (g_uBeeperEnabled) {
         // generate square wave at the proper frequency
-        for (int byte_pos = 0; byte_pos < length; byte_pos += AUDIO_BYTES_PER_SAMPLE) {
+        for (int byte_pos = 0; byte_pos < length; byte_pos += sound::BYTES_PER_SAMPLE) {
             // endian-independent! :)
             // NOTE : assumes stream is in little endian format
             stream[byte_pos] = stream[byte_pos + 2] = ((Uint16)g_s16SampleVal) & 0xFF;
-            stream[byte_pos + 1] = stream[byte_pos + 3] =
+            stream[byte_pos + 1]                    = stream[byte_pos + 3] =
                 (((Uint16)g_s16SampleVal) >> 8) & 0xFF;
 
             ++g_uSampleCount; // we've just done 1 sample (4 bytes/sample)
@@ -152,4 +155,5 @@ void beeper_get_stream(Uint8 *stream, int length, int internal_id)
     else {
         memset(stream, 0, length);
     }
+}
 }

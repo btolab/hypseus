@@ -1,5 +1,5 @@
 /*
- * cop.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Mark Broadhead
  *
@@ -49,10 +49,6 @@
 #include "cop.h"
 //#include <iostream.h>
 //#include <iomanip.h>
-
-#ifdef _MSC_VER
-#pragma warning (disable:4244)	// disable the warning about possible loss of data
-#endif
 
 // Internal functions
 void preinst(void); // Function for pre intruction execution

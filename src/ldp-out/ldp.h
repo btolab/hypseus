@@ -1,5 +1,5 @@
 /*
- * ldp.h
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -36,15 +36,10 @@ enum {
 #include <SDL.h> // needed for datatypes
 
 // for bug logging
-#include <string>
 #include <list>
+#include <string>
 
 using namespace std;
-
-#ifdef _MSC_VER
-#pragma warning(disable : 4786) // disable warning about truncating to 255 in
-                                // debug info
-#endif
 
 #define FRAME_SIZE 5
 
@@ -257,9 +252,6 @@ class ldp
     // helper function, shouldn't be called directly
     void increment_current_frame();
 
-    bool need_serial;        // whether this LDP driver needs the serial port
-                             // initialized
-    bool serial_initialized; // whether serial has been initialized
     bool player_initialized; // whether the LDP has been properly initialized
     bool m_bIsVLDP;          // this is true if our LDP type is VLDP
     bool blitting_allowed;   // whether it's ok to blit directly to the screen
@@ -275,7 +267,7 @@ class ldp
                                  // frame)
     // UPDATE : we aren't using cycles anymore (see pre_think())
     //	Uint64 m_play_cycles;	// # of elapsed cpu cycles from when we last
-    //issued a play command
+    // issued a play command
     Uint32 m_play_time; // current time when we last issued a play command
     unsigned int m_start_time; // time when ldp() class was instantiated (only
                                // used when not using a cpu)
@@ -340,13 +332,13 @@ class ldp
     // and m_uCurrentFrame
     unsigned int m_uMsFrameBoundary;
 
-    // How many milliseconds have elapsed since Daphne started
+    // How many milliseconds have elapsed since Hypseus started
     // This value is changed by pre_think() which is called every 1 ms by the
     // cpu loop
     // This value is used to calculate how many emulated vblanks have occurred.
     unsigned int m_uElapsedMsSinceStart;
 
-    // how many vblanks have occurred since Daphne started, as calculated by
+    // how many vblanks have occurred since Hypseus started, as calculated by
     // pre_think()
     unsigned int m_uVblankCount;
 
@@ -372,7 +364,7 @@ class ldp
   private:
     // set to true if pre_init has been called (used to error checking)
     bool m_bPreInitCalled;
-    bool m_bVerbose; // Control message displays on daphne_log.txt -- rdg2010
+    bool m_bVerbose; // Control message displays on hypseus_log.txt -- rdg2010
 };
 
 // same as regular ldp class but has no seek or skip delay (testing skipping

@@ -1,5 +1,5 @@
 /*
- * gpworld.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Mark Broadhead
  *
@@ -52,10 +52,10 @@
 
 gpworld::gpworld()
 {
-    struct cpudef cpu;
+    struct cpu::def cpu;
 
     m_shortgamename = "gpworld";
-    memset(&cpu, 0, sizeof(struct cpudef));
+    memset(&cpu, 0, sizeof(struct cpu::def));
     memset(banks, 0xff, 7); // fill banks with 0xFF's
     banks[5] = 0;
     banks[6] = 0;
@@ -69,14 +69,14 @@ gpworld::gpworld()
     m_video_overlay_height = GPWORLD_OVERLAY_H;
     m_palette_color_count  = GPWORLD_COLOR_COUNT;
 
-    cpu.type              = CPU_Z80;
+    cpu.type              = cpu::type::Z80;
     cpu.hz                = 5000000; // guess based on Astron's clock speed
     cpu.irq_period[0]     = 16.6666; // interrupt from vblank (60hz)
     cpu.nmi_period        = 16.6666; // nmi from LD-V1000 command strobe
     cpu.initial_pc        = 0;
     cpu.must_copy_context = false;
     cpu.mem = m_cpumem;
-    add_cpu(&cpu); // add a z80
+    cpu::add(&cpu); // add a z80
 
     m_video_row_offset = 8; // shift video up by 16 pixels (8 rows)
 
@@ -120,7 +120,7 @@ void gpworld::do_irq(unsigned int which_irq)
     if (which_irq == 0) {
         // Redraws the screen (if needed) on interrupt
         recalc_palette();
-        video_blit();
+        blit();
         Z80_ASSERT_IRQ;
     }
 }
@@ -130,8 +130,8 @@ void gpworld::do_nmi()
 {
     // only do an nmi if nmie is enabled
     if (nmie) {
-        write_ldv1000(ldp_output_latch);
-        ldp_input_latch = read_ldv1000();
+        ldv1000::write(ldp_output_latch);
+        ldp_input_latch = ldv1000::read();
         Z80_ASSERT_NMI;
     }
 }
@@ -415,7 +415,7 @@ void gpworld::recalc_palette()
             j         = 0xca00 + (i * 0x02);
             int color = m_cpumem[j] | ((m_cpumem[j + 1] & 0x0f) << 8);
 
-            palette_set_color(i, palette_lookup[color]);
+            palette::set_color(i, palette_lookup[color]);
 
             // the final palette is blank in gpworld so we'll put our tile
             // palette here
@@ -444,7 +444,7 @@ void gpworld::recalc_palette()
                 }
                 // a new color
                 else {
-                    palette_set_color(k, palette_lookup[color]);
+                    palette::set_color(k, palette_lookup[color]);
 
                     used_tile_colors[color] = k;
                     tile_color_pointer[i]   = k;
@@ -460,13 +460,13 @@ void gpworld::recalc_palette()
             }
         }
 
-        palette_finalize();
+        palette::finalize();
     }
     palette_modified = false;
 }
 
 // updates gpworld's video
-void gpworld::video_repaint()
+void gpworld::repaint()
 {
     // This should be much faster
     SDL_FillRect(m_video_overlay[m_active_video_overlay], NULL, m_transparent_color);

@@ -1,5 +1,5 @@
 /*
-* bega.cpp
+* ____ DAPHNE COPYRIGHT NOTICE ____
 *
 * Copyright (C) 2001 Mark Broadhead
 *
@@ -37,6 +37,7 @@
 #include "config.h"
 
 #include <string.h> // for memset
+#include <plog/Log.h>
 #include "bega.h"
 #include "../cpu/cpu.h"
 #include "../cpu/nes6502.h"
@@ -50,10 +51,10 @@
 
 bega::bega()
 {
-    struct cpudef cpu;
+    struct cpu::def cpu;
 
     m_shortgamename = "bega";
-    memset(&cpu, 0, sizeof(struct cpudef));
+    memset(&cpu, 0, sizeof(struct cpu::def));
     memset(banks, 0xFF, 3); // fill banks with 0xFF's
     // turn on diagnostics
     //	banks[2] = 0x7f;
@@ -67,7 +68,7 @@ bega::bega()
     m_video_overlay_height = BEGA_OVERLAY_H;
     m_palette_color_count  = BEGA_COLOR_COUNT;
 
-    cpu.type          = CPU_M6502;
+    cpu.type          = cpu::type::M6502;
     cpu.hz            = BEGA_CPU_HZ / 6;  // Bega's CPUs run at 2.5 MHz?
     cpu.irq_period[0] = (1000.0 / 59.94); // no periodic interrupt, we are just
                                           // using this for vblank (60hz)
@@ -80,16 +81,16 @@ bega::bega()
                                                        // 1000 ms pre sec, 9600
                                                        // bits per second
 
-    cpu_change_interleave(2);
+    cpu::change_interleave(2);
 
     cpu.initial_pc        = 0;
     cpu.must_copy_context = true; // set this to true when you add multiple
                                   // 6502's
     cpu.mem = m_cpumem;
-    add_cpu(&cpu); // add 6502 cpu
+    cpu::add(&cpu); // add 6502 cpu
 
-    memset(&cpu, 0, sizeof(struct cpudef));
-    cpu.type          = CPU_M6502;
+    memset(&cpu, 0, sizeof(struct cpu::def));
+    cpu.type          = cpu::type::M6502;
     cpu.hz            = BEGA_CPU_HZ / 6; // Bega's CPUs run at 2.5 MHz?
     cpu.irq_period[0] = 0.0;
     cpu.nmi_period    = 2.0; // this value is unknown... it controls the speed at
@@ -99,21 +100,21 @@ bega::bega()
     cpu.must_copy_context = true; // set this to true when you add multiple
                                   // 6502's
     cpu.mem = m_cpumem2;
-    add_cpu(&cpu); // add sound 6502 cpu
+    cpu::add(&cpu); // add sound 6502 cpu
 
-    struct sounddef soundchip;
-    soundchip.type  = SOUNDCHIP_AY_3_8910;
+    struct sound::chip soundchip;
+    soundchip.type  = sound::CHIP_AY_3_8910;
     soundchip.hz    = BEGA_CPU_HZ / 10; // Bega runs the sound chips at 1.5 MHz
-    m_soundchip1_id = add_soundchip(&soundchip);
-    m_soundchip2_id = add_soundchip(&soundchip);
+    m_soundchip1_id = sound::add_chip(&soundchip);
+    m_soundchip2_id = sound::add_chip(&soundchip);
 
     // make chip 1 only play in right speaker
-    set_soundchip_volume(m_soundchip1_id, 1, AUDIO_MAX_VOLUME);
-    set_soundchip_volume(m_soundchip1_id, 0, 0);
+    sound::set_chip_volume(m_soundchip1_id, 1, sound::MAX_VOLUME);
+    sound::set_chip_volume(m_soundchip1_id, 0, 0);
 
     // make chip 2 only play in left speaker
-    set_soundchip_volume(m_soundchip2_id, 0, AUDIO_MAX_VOLUME);
-    set_soundchip_volume(m_soundchip2_id, 1, 0);
+    sound::set_chip_volume(m_soundchip2_id, 0, sound::MAX_VOLUME);
+    sound::set_chip_volume(m_soundchip2_id, 1, 0);
 
     ldp_status = 0x00;
 
@@ -177,7 +178,7 @@ void bega::set_version(int version)
              {NULL}};
         m_rom_list = bega_roms;
     } else {
-        printline("BEGA:  Unsupported -version paramter, ignoring...");
+        LOGW << "Unsupported -version paramter, ignoring...";
     }
 }
 
@@ -212,7 +213,7 @@ cobra::cobra() // dedicated version of Cobra Command
 // we need to override bega::set_version so we don't load the wrong roms
 void cobra::set_version(int version)
 {
-    printline("COBRA:  Unsupported -version paramter, ignoring...");
+    LOGW << "Unsupported -version paramter, ignoring...";
 }
 
 roadblaster::roadblaster() // dedicated version of Cobra Command
@@ -284,7 +285,7 @@ void roadblaster::patch_roms()
     if (m_cheat_requested) {
         // infinite lives cheat
         m_cpumem[0xC41c] = 0x00; // Dec "0" from total lives!
-        printline("RoadBlaster infinite lives cheat enabled!");
+        LOGI << "infinite lives cheat enabled!";
     }
 }
 
@@ -301,7 +302,7 @@ bool bega::set_bank(unsigned char which_bank, unsigned char value)
         banks[2] = (unsigned char)(value ^ 0xFF); // switches are active low
         break;
     default:
-        printline("ERROR: Bank specified is out of range!");
+        LOGW << "Bank specified is out of range!";
         result = false;
         break;
     }
@@ -312,13 +313,13 @@ bool bega::set_bank(unsigned char which_bank, unsigned char value)
 // clocks screen updates and vblank timing
 void bega::do_irq(unsigned int which_irq)
 {
-    if (cpu_getactivecpu() == 0) {
+    if (cpu::get_active() == 0) {
         if (which_irq == 0) {
-            video_blit();
+            blit();
             vblank = true;
         } else {
             // periodicly check if there is any laserdisc data to read
-            if (ldp1000_result_ready()) {
+            if (ldp1000::result_ready()) {
                 // logerror("found ldp data! issuing interrupt\n");
                 // if we get new data set the interrupt bit (7), the recieve
                 // data full bit (0),
@@ -345,7 +346,7 @@ Uint8 bega::cpu_mem_read(Uint16 addr)
     //   char s[81] = {0};
     Uint8 result;
 
-    if (cpu_getactivecpu() == 0) {
+    if (cpu::get_active() == 0) {
         result = m_cpumem[addr];
 
         // main ram
@@ -404,8 +405,7 @@ Uint8 bega::cpu_mem_read(Uint16 addr)
         }
 
         else {
-            //         sprintf(s, "CPU: 0  - Unmapped read from %x", addr);
-            //         printline(s);
+            LOGD << fmt("CPU: 0  - Unmapped read from %x", addr);
         }
     }
 
@@ -426,8 +426,7 @@ Uint8 bega::cpu_mem_read(Uint16 addr)
         }
 
         else {
-            // sprintf(s, "CPU: 1  - Unmapped read from %x", addr);
-            // printline(s);
+            LOGD << fmt("CPU: 1  - Unmapped read from %x", addr);
         }
     }
 
@@ -436,9 +435,7 @@ Uint8 bega::cpu_mem_read(Uint16 addr)
 
 void bega::cpu_mem_write(Uint16 addr, Uint8 value)
 {
-    char s[81] = {0};
-
-    if (cpu_getactivecpu() == 0) {
+    if (cpu::get_active() == 0) {
         // main ram (0 - 0x0FFF)
         if (addr <= 0x0fff) {
         }
@@ -450,7 +447,7 @@ void bega::cpu_mem_write(Uint16 addr, Uint8 value)
         // sound data
         else if (addr == 0x1004) {
             m_sounddata_latch = value;
-            cpu_generate_irq(1, 0); // generate an interrupt on the sound cpu
+            cpu::generate_irq(1, 0); // generate an interrupt on the sound cpu
         }
 
         // m6850 control port
@@ -506,9 +503,9 @@ void bega::cpu_mem_write(Uint16 addr, Uint8 value)
             bit2         = (value >> 7) & 0x01;
             temp_color.b = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
 
-            palette_set_color(addr & 0xff, temp_color);
-            palette_finalize(); // we need to do this here because it takes
-                                // place outside palette_calculate
+            palette::set_color(addr & 0xff, temp_color);
+            palette::finalize(); // we need to do this here because it takes
+                                 // place outside palette_calculate
 
             m_video_overlay_needs_update = true;
         }
@@ -520,15 +517,12 @@ void bega::cpu_mem_write(Uint16 addr, Uint8 value)
 
         // main rom (0x4000 - 0xFFFF)
         else if (addr >= 0x4000) {
-            sprintf(s, "Error! write to main rom at %x", addr);
-            printline(s);
+            LOGW << fmt("write to main rom at %x", addr);
         }
 
         else {
             //         m_cpumem[addr] = value;	// MPO : seems redundant
-            //         sprintf(s, "CPU 0 - Unmapped write to %x with value %x",
-            //         addr, value);
-            //         printline(s);
+	    LOGD << fmt("CPU 0 - Unmapped write to %x with value %x", addr, value);
         }
 
         m_cpumem[addr] = value;
@@ -539,11 +533,11 @@ void bega::cpu_mem_write(Uint16 addr, Uint8 value)
         // 2048 bytes of scratch ram
         if (addr <= 0x07ff) {
         } else if (addr == 0x2000) {
-            audio_write_ctrl_data(m_soundchip1_address_latch, value, m_soundchip1_id);
+            sound::write_ctrl_data(m_soundchip1_address_latch, value, m_soundchip1_id);
         } else if (addr == 0x4000) {
             m_soundchip1_address_latch = value;
         } else if (addr == 0x6000) {
-            audio_write_ctrl_data(m_soundchip2_address_latch, value, m_soundchip2_id);
+            sound::write_ctrl_data(m_soundchip2_address_latch, value, m_soundchip2_id);
         } else if (addr == 0x8000) {
             m_soundchip2_address_latch = value;
         }
@@ -552,8 +546,7 @@ void bega::cpu_mem_write(Uint16 addr, Uint8 value)
         }
         // main rom (0xE000 - 0xFFFF)
         else if (addr >= 0xe000) {
-            sprintf(s, "Error! write to main rom at %x", addr);
-            printline(s);
+            LOGW << fmt("Error! write to main rom at %x", addr);
         } else {
             m_cpumem2[addr] = value;
             // sprintf(s, "CPU 1 - Unmapped write to %x with value %x", addr,
@@ -571,13 +564,13 @@ void bega::palette_calculate()
     // we can't set it statically
 
     // setup transparency stuff
-    palette_set_transparency(0, false); // change default color 0 to
+    palette::set_transparency(0, false); // change default color 0 to
                                         // non-transparent
-    palette_set_transparency(BEGA_TRANSPARENT_COLOR, true);
+    palette::set_transparency(BEGA_TRANSPARENT_COLOR, true);
 }
 
 // updates bega's video
-void bega::video_repaint()
+void bega::repaint()
 {
     // This is much faster!
     SDL_FillRect(m_video_overlay[m_active_video_overlay], NULL,
@@ -666,11 +659,11 @@ void bega::input_enable(Uint8 move)
         break;
     case SWITCH_COIN1:
         banks[1] &= ~0x40;
-        cpu_generate_nmi(0);
+        cpu::generate_nmi(0);
         break;
     case SWITCH_COIN2:
         banks[1] &= ~0x80;
-        cpu_generate_nmi(0);
+        cpu::generate_nmi(0);
         break;
     case SWITCH_SERVICE:
         banks[0] &= ~0x04;
@@ -678,7 +671,7 @@ void bega::input_enable(Uint8 move)
     case SWITCH_TEST:
         break;
     default:
-        printline("Error, bug in move enable");
+        LOGW << "Error, bug in move enable";
         break;
     }
 }
@@ -727,7 +720,7 @@ void bega::input_disable(Uint8 move)
     case SWITCH_TEST:
         break;
     default:
-        printline("Error, bug in move enable");
+        LOGW << "Error, bug in move enable";
         break;
     }
 }
@@ -846,68 +839,68 @@ Uint8 bega::read_m6850_status() { return mc6850_status; }
 void bega::write_m6850_control(Uint8 data)
 {
     if ((data & 0x03) == 0x03) {
-        printline("MC6850: Master Reset!");
+        LOGD << "Master Reset!";
         mc6850_status = 0x02;
     } else {
         switch (data & 0x03) {
         case 0x00:
-            printline("MC6850: clock set to x1");
+            LOGD << "clock set to x1";
             break;
         case 0x01:
-            printline("MC6850: clock set to x16");
+            LOGD << "clock set to x16";
             break;
         case 0x02:
-            printline("MC6850: clock set to x32");
+            LOGD << "clock set to x32";
             break;
         }
 
         switch (data & 0x1c) {
         case 0x00:
-            printline("MC6850: 7 Bits+Even Parity+2 Stop Bits");
+            LOGD << "7 Bits+Even Parity+2 Stop Bits";
             break;
         case 0x04:
-            printline("MC6850: 7 Bits+Odd Parity+2 Stop Bits");
+            LOGD << "7 Bits+Odd Parity+2 Stop Bits";
             break;
         case 0x08:
-            printline("MC6850: 7 Bits+Even Parity+1 Stop Bits");
+            LOGD << "7 Bits+Even Parity+1 Stop Bits";
             break;
         case 0x0c:
-            printline("MC6850: 7 Bits+Odd Parity+1 Stop Bits");
+            LOGD << "7 Bits+Odd Parity+1 Stop Bits";
             break;
         case 0x10:
-            printline("MC6850: 8 Bits+2 Stop Bits");
+            LOGD << "8 Bits+2 Stop Bits";
             break;
         case 0x14:
-            printline("MC6850: 8 Bits+1 Stop Bits");
+            LOGD << "8 Bits+1 Stop Bits";
             break;
         case 0x18:
-            printline("MC6850: 8 Bits+Even Parity+1 Stop Bits");
+            LOGD << "8 Bits+Even Parity+1 Stop Bits";
             break;
         case 0x1c:
-            printline("MC6850: 8 Bits+Odd Parity+1 Stop Bits");
+            LOGD << "8 Bits+Odd Parity+1 Stop Bits";
             break;
         }
 
         switch (data & 0x60) {
         case 0x00:
-            printline("MC6850: /RTS=low, Transmitting Interrupt Disabled");
+            LOGD << "/RTS=low, Transmitting Interrupt Disabled";
             break;
         case 0x20:
-            printline("MC6850: /RTS=low, Transmitting Interrupt Enabled");
+            LOGD << "/RTS=low, Transmitting Interrupt Enabled";
             break;
         case 0x40:
-            printline("MC6850: /RTS=high, Transmitting Interrupt Disabled");
+            LOGD << "/RTS=high, Transmitting Interrupt Disabled";
             break;
         case 0x60:
-            printline("MC6850: /RTS=low, Transmits break level on Transmit "
-                      "Data Output, Transmitting Interrupt Disabled");
+            LOGD << "/RTS=low, Transmits break level on Transmit "
+                      "Data Output, Transmitting Interrupt Disabled";
             break;
         }
 
         if (data & 0x80) {
-            printline("MC6850: Recieve Interrupt Enabled");
+            LOGD << "Recieve Interrupt Enabled";
         } else {
-            printline("MC6850: Recieve Interrupt Disabled");
+            LOGD << "Recieve Interrupt Disabled";
         }
     }
 }
@@ -916,7 +909,7 @@ Uint8 bega::read_m6850_data()
 {
     // if there is new data get it from the ldp, otherwise return the old data
     if (mc6850_status & 0x01) {
-        ldp_status = read_ldp1000();
+        ldp_status = ldp1000::read();
     }
 
     // reading from the data register clears the interrupt bit (7) and the
@@ -934,5 +927,5 @@ void bega::write_m6850_data(Uint8 data)
     // writing to the data register clears the interrupt bit (7) and the
     // transmit data register empty bit (1)
     mc6850_status &= 0x7d;
-    write_ldp1000(data);
+    ldp1000::write(data);
 }

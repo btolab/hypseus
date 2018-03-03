@@ -1,5 +1,5 @@
 /*
- * pr8210.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -44,26 +44,28 @@
 #include "pr8210.h"
 #include "../ldp-out/ldp.h"
 #include "../timer/timer.h"
+#include <plog/Log.h>
 
-unsigned int g_pr8210_seek_received = 0; // whether we've received a seek
+namespace pr8210
+{
+unsigned int g_seek_received = 0; // whether we've received a seek
                                          // command
-static char g_pr8210_frame[6]     = {0};
-unsigned int g_pr8210_digit_count = 0;
+static char g_frame[6]     = {0};
+unsigned int g_digit_count = 0;
 
-bool g_pr8210_audio1_mute = false;
-bool g_pr8210_audio2_mute = false;
+bool g_audio1_mute = false;
+bool g_audio2_mute = false;
 
 // used to determine whether to display errors if a search fails
-bool g_pr8210_search_pending = false;
+bool g_search_pending = false;
 
 // processes 10 blips into a PR-8210 command
 // The blips should be stored in the lowest 10 bits of the integer
 // So for example, if my command is 0010000000 then my 32-bit integer would like
 // like
 // ???????? ???????? ??????00 10000000
-void pr8210_command(unsigned int blips)
+void command(unsigned int blips)
 {
-    char s[80];                             // for printing error messages
     static unsigned int old_blips = 0xFFFF; // the last command we received
     // initialied to 0xFFFF to make sure it is never equal to any new command we
     // get
@@ -71,7 +73,7 @@ void pr8210_command(unsigned int blips)
     blips &= 0x3FF; // make sure any extra garbage is stripped off
 
     //	printf("Command is ");
-    //	pr8210_print_binary(blips);
+    //	print_binary(blips);
     //	printf("\n");
 
     // if the new blips are not equal to the old ones, then accept command
@@ -87,25 +89,25 @@ void pr8210_command(unsigned int blips)
                 g_ldp->pre_play();
                 break;
             case 0x10: // 3x play forward (10000)
-                printline("PR-8210 : 3X play forward (unsupported)");
+                LOGD << "3X play forward (unsupported)";
                 break;
             case 0x08: // scan forward (01000)
-                printline("PR-8210 : scan forward (unsupported)");
+                LOGD << "scan forward (unsupported)";
                 break;
             case 0x18: // slow forward (11000)
-                printline("PR-8210 : slow forward (unsupported)");
+                LOGD << "slow forward (unsupported)";
                 break;
             case 0x4: // step forward (00100)
                 g_ldp->pre_step_forward();
                 break;
             case 0xC: // 3x play reverse (01100)
-                printline("PR-8210 : 3x play reverse (unsupported)");
+                LOGD << "3x play reverse (unsupported)";
                 break;
             case 0x1C: // scan reverse (11100)
-                printline("PR-8210 : scan reverse (unsupported)");
+                LOGD << "scan reverse (unsupported)";
                 break;
             case 0x2: // slow reverse (00010)
-                printline("PR-8210 : slow reverse (unsupported)");
+                LOGD << "slow reverse (unsupported)";
                 break;
             case 0x12: // step reverse (10010)
                 g_ldp->pre_step_backward();
@@ -114,62 +116,61 @@ void pr8210_command(unsigned int blips)
                 g_ldp->pre_pause();
                 break;
             case 0xE: // Audio 1/L (01110)
-                pr8210_audio1();
+                audio1();
                 break;
             case 0x16: // Audio 2/R (10110)
-                pr8210_audio2();
+                audio2();
                 break;
             case 0x1E: // Reject (11110)
                 // if the player is stopped, reject ejects the player,
                 // therefore, we ignore this command
                 // because we probably don't ever want this to occur
-                printline("PR-8210 : reject received (ignored)");
+                LOGD << "reject received (ignored)";
                 break;
             case 0x1A: // Seek (11010)
-                pr8210_seek();
+                seek();
                 break;
             case 0x6: // Chapter (00110)
-                printline("PR-8210 : Chapter (unsupported)");
+                LOGD << "Chapter (unsupported)";
                 break;
             case 0x1: // 0 (00001)
-                pr8210_add_digit('0');
+                add_digit('0');
                 break;
             case 0x11: // 1 (10001)
-                pr8210_add_digit('1');
+                add_digit('1');
                 break;
             case 0x9: // 2 (01001)
-                pr8210_add_digit('2');
+                add_digit('2');
                 break;
             case 0x19: // 3 (11001)
-                pr8210_add_digit('3');
+                add_digit('3');
                 break;
             case 0x5: // 4 (00101)
-                pr8210_add_digit('4');
+                add_digit('4');
                 break;
             case 0x15: // 5 (10101)
-                pr8210_add_digit('5');
+                add_digit('5');
                 break;
             case 0xD: // 6 (01101)
-                pr8210_add_digit('6');
+                add_digit('6');
                 break;
             case 0x1D: // 7 (11101)
-                pr8210_add_digit('7');
+                add_digit('7');
                 break;
             case 0x3: // 8 (00011)
-                pr8210_add_digit('8');
+                add_digit('8');
                 break;
             case 0x13: // 9 (10011)
-                pr8210_add_digit('9');
+                add_digit('9');
                 break;
             case 0xB: // Frame (01011)
-                printline("PR-8210 : Frame (unsupported)");
+                LOGD << "Frame (unsupported)";
                 break;
             case 0x0: // filler to separate two of the same commands, used by
                       // Cliff Hanger
                 break;
             default:
-                sprintf(s, "PR8210: Unknown command %x", command);
-                printline(s);
+                LOGE << fmt("Unknown command %x", command);
                 break;
             } // end switch
         }     // end valid header and footer
@@ -177,7 +178,7 @@ void pr8210_command(unsigned int blips)
         // else if we didn't get filler (all 0's) to separate commands, notify
         // user that something is wrong
         else if (blips != 0) {
-            printline("PR8210 Error : Bad header or footer");
+            LOGE << "Bad header or footer";
         }
 
         // else we got all 0's which is just filler to separate two commands
@@ -187,61 +188,60 @@ void pr8210_command(unsigned int blips)
 }
 
 // Audio 1/L
-void pr8210_audio1()
+void audio1()
 {
-    if (g_pr8210_audio1_mute) {
+    if (g_audio1_mute) {
         g_ldp->enable_audio1();
-        g_pr8210_audio1_mute = false;
+        g_audio1_mute = false;
     } else {
         g_ldp->disable_audio1();
-        g_pr8210_audio1_mute = true;
+        g_audio1_mute = true;
     }
 }
 
 // Audio 2/R
-void pr8210_audio2()
+void audio2()
 {
-    if (g_pr8210_audio2_mute) {
+    if (g_audio2_mute) {
         g_ldp->enable_audio2();
-        g_pr8210_audio2_mute = false;
+        g_audio2_mute = false;
     } else {
         g_ldp->disable_audio2();
-        g_pr8210_audio2_mute = true;
+        g_audio2_mute = true;
     }
 }
 
-void pr8210_seek()
+void seek()
 {
     //	printline("PR8210 Seek Received");
 
     // if this is our first one...
-    if (!g_pr8210_seek_received) {
-        g_pr8210_seek_received = 1;
+    if (!g_seek_received) {
+        g_seek_received = 1;
     }
 
     // if we are getting another seek command, it means that we're done
     // receiving digits and to execute the seek
     else {
-        g_pr8210_frame[g_pr8210_digit_count] = 0; // terminate string, note the
-                                                  // g_pr8210_digit_count should
+        g_frame[g_digit_count] = 0; // terminate string, note the
+                                                  // g_digit_count should
                                                   // never be out of bounds
 
-        if (g_pr8210_digit_count > 0) {
+        if (g_digit_count > 0) {
             if (g_ldp->get_status() != LDP_SEARCHING) {
-                g_pr8210_search_pending = true;
-                g_ldp->pre_search(g_pr8210_frame, false); // non-blocking
+                g_search_pending = true;
+                g_ldp->pre_search(g_frame, false); // non-blocking
                                                           // seeking, drivers
                                                           // SHOULD use
-                                                          // pr8210_get_current_frame()
+                                                          // get_current_frame()
             } else
-                printline("PR8210 : got search command before we were done "
-                          "searching.. ignoring..");
+                LOGW << "got search command before we were done searching.. ignoring..";
         }
 
         // else, I think this is some kind of pr8210 reset
         // Cliff Hanger does this.. seems safe to ignore it.
 
-        g_pr8210_digit_count = 0; // reset digit count
+        g_digit_count = 0; // reset digit count
     }
 }
 
@@ -249,22 +249,21 @@ void pr8210_seek()
 // g_ldp->get_current_frame() directly
 //  because this function calls the necessary g_ldp->get_status() automatically.
 //  NOTE!! A result of 0 means we are seeking or stopped!
-Uint16 pr8210_get_current_frame()
+Uint16 get_current_frame()
 {
     Uint16 result = 0; // 0 means we are seeking or stopped
     int status    = g_ldp->get_status();
 
     if ((status == LDP_PLAYING) || (status == LDP_PAUSED)) {
         result                  = g_ldp->get_current_frame();
-        g_pr8210_search_pending = false; // if there was a search pending, it is
+        g_search_pending = false; // if there was a search pending, it is
                                          // over now
     }
     // if the search resulted in an error
-    else if (g_pr8210_search_pending && (status != LDP_SEARCHING)) {
-        g_pr8210_search_pending = false;
+    else if (g_search_pending && (status != LDP_SEARCHING)) {
+        g_search_pending = false;
 
-        printline("PR8210 SEARCH ERROR: if you're using VLDP then your "
-                  "framefile may be invalid!");
+        LOGW << "SEARCH: if you're using VLDP then your framefile may be invalid!";
     }
     // else the search is still pending, or we were never searching
 
@@ -272,57 +271,50 @@ Uint16 pr8210_get_current_frame()
 }
 
 // ch is the digit to add and it's in ASCII format
-void pr8210_add_digit(char ch)
+void add_digit(char ch)
 {
-    /*
-    char s[81];
-    sprintf(s, "PR8210 Digit Received : %c\n", ch);
-    printline(s);
-    */
-
     // make sure we are getting digits after we've gotten a seek
-    if (g_pr8210_seek_received) {
+    if (g_seek_received) {
         // safety check
-        if (g_pr8210_digit_count < (sizeof(g_pr8210_frame) - 1)) {
-            g_pr8210_frame[g_pr8210_digit_count] = ch;
-            g_pr8210_digit_count++;
+        if (g_digit_count < (sizeof(g_frame) - 1)) {
+            g_frame[g_digit_count] = ch;
+            g_digit_count++;
         } else {
-            printline(
-                "PR8210 ERROR : Received too many digits, undefined behavior!");
-            g_pr8210_digit_count = 0;
+            LOGE << "Received too many digits, undefined behavior!";
+            g_digit_count = 0;
         }
     }
 
     // if we are getting digits without first getting a seek, something
     // is wrong
     else {
-        printline("PR8210 error: digit received without seek command");
+        LOGE << "digit received without seek command";
     }
 }
 
-void pr8210_reset() // since the audio commands are toggles, we have to set
+void reset() // since the audio commands are toggles, we have to set
                     // audio to on (default) on reset
 {
-    printline("PR8210: Reset");
-    if (g_pr8210_audio1_mute) {
+    LOGD << "Reset";
+    if (g_audio1_mute) {
         g_ldp->enable_audio1();
-        g_pr8210_audio1_mute = false;
+        g_audio1_mute = false;
     } else {
         g_ldp->disable_audio1();
-        g_pr8210_audio1_mute = true;
+        g_audio1_mute = true;
     }
-    if (g_pr8210_audio2_mute) {
+    if (g_audio2_mute) {
         g_ldp->enable_audio2();
-        g_pr8210_audio2_mute = false;
+        g_audio2_mute = false;
     } else {
         g_ldp->disable_audio2();
-        g_pr8210_audio2_mute = true;
+        g_audio2_mute = true;
     }
 }
 
 // for debugging only
 // prints a 10 bit PR-8210 command
-void pr8210_print_binary(unsigned int num)
+void print_binary(unsigned int num)
 {
     int i = 0;
 
@@ -330,4 +322,5 @@ void pr8210_print_binary(unsigned int num)
         outchr(((num & 0x200) >> 9) + '0');
         num = num << 1; // print the next digit ...
     }
+}
 }

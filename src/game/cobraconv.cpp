@@ -1,5 +1,5 @@
 /*
-* cobraconv.cpp
+* ____ DAPHNE COPYRIGHT NOTICE ____
 *
 * Copyright (C) 2003 Warren Ondras
 *
@@ -35,6 +35,7 @@
 #include "config.h"
 
 #include <string.h>
+#include <plog/Log.h>
 #include "cobraconv.h"
 #include "../cpu/cpu.h"
 #include "../cpu/nes6502.h"
@@ -48,7 +49,7 @@
 
 cobraconv::cobraconv()
 {
-    struct cpudef cpu;
+    struct cpu::def cpu;
 
     m_shortgamename = "cobraconv";
     memset(banks, 0xFF, 4); // fill banks with 0xFF's
@@ -61,8 +62,8 @@ cobraconv::cobraconv()
     m_palette_color_count  = COBRACONV_COLOR_COUNT;
     m_video_row_offset     = -8; // 16 pixels, 8 rows
 
-    memset(&cpu, 0, sizeof(struct cpudef));
-    cpu.type              = CPU_M6502;
+    memset(&cpu, 0, sizeof(struct cpu::def));
+    cpu.type              = cpu::type::M6502;
     cpu.hz                = 2500000; // unverified
     cpu.irq_period[0]     = 0; // we'll generate IRQ's manually in the game driver
     cpu.nmi_period        = 0; // no periodic nmi
@@ -70,10 +71,10 @@ cobraconv::cobraconv()
     cpu.must_copy_context = true; // set this to true when you add multiple
                                   // 6502's
     cpu.mem = m_cpumem;
-    add_cpu(&cpu); // add 6502 cpu
+    cpu::add(&cpu); // add 6502 cpu
 
-    memset(&cpu, 0, sizeof(struct cpudef));
-    cpu.type              = CPU_M6502;
+    memset(&cpu, 0, sizeof(struct cpu::def));
+    cpu.type              = cpu::type::M6502;
     cpu.hz                = 2500000; // unverified
     cpu.irq_period[0]     = 0;
     cpu.irq_period[1]     = 0;
@@ -82,16 +83,16 @@ cobraconv::cobraconv()
     cpu.must_copy_context = true; // set this to true when you add multiple
                                   // 6502's
     cpu.mem = m_cpumem2;
-    add_cpu(&cpu); // add 6502 cpu
+    cpu::add(&cpu); // add 6502 cpu
 
-    struct sounddef soundchip;
-    soundchip.type = SOUNDCHIP_AY_3_8910;
+    struct sound::chip soundchip;
+    soundchip.type = sound::CHIP_AY_3_8910;
     soundchip.hz   = 1500000; // Bega runs the sound chips at 1.5 MHz
-    m_soundchip_id = add_soundchip(&soundchip);
+    m_soundchip_id = sound::add_chip(&soundchip);
 
     // the ROM expects searching to be extra slow or it will lock up after death
     // scenes
-    ldv1000_set_seconds_per_search(1.0);
+    ldv1000::set_seconds_per_search(1.0);
 
     // ldp_status = 0x00;
 
@@ -134,10 +135,10 @@ cobraconv::cobraconv()
 void cobraconv::do_irq(unsigned int which_irq)
 {
     // IRQ moved to OnVblank function
-    switch (cpu_getactivecpu()) {
+    switch (cpu::get_active()) {
     default:
         // this should never happen
-        printline("cobraconv ERROR: unhandled IRQ received");
+        LOGW << "unhandled IRQ received";
         break;
     case 0:
         nes6502_irq();
@@ -157,11 +158,9 @@ void cobraconv::do_nmi()
 Uint8 cobraconv::cpu_mem_read(Uint16 addr)
 {
     //	static unsigned int loopcount = 0;
-    char s[81] = {0};
-
     Uint8 result = 0;
 
-    switch (cpu_getactivecpu()) {
+    switch (cpu::get_active()) {
     case 0:
         result = m_cpumem[addr];
 
@@ -184,7 +183,7 @@ Uint8 cobraconv::cpu_mem_read(Uint16 addr)
         // bit 0 - tilt input
         else if (addr == 0x1001) {
             // vblank is bit 7
-            if (ldv1000_is_vsync_active()) {
+            if (ldv1000::is_vsync_active()) {
                 banks[3] |= 0x80; // set bit 7
             } else {
                 banks[3] &= 0x7F; // clear bit 7
@@ -192,7 +191,7 @@ Uint8 cobraconv::cpu_mem_read(Uint16 addr)
 
             // NOTE: status strobe is active when bit 6 is set (see E500 in ROM
             // code for example)
-            //		    if (ldv1000_is_status_strobe_active())
+            //		    if (ldv1000::is_status_strobe_active())
             // UPDATE:
             // We have a problem where The IRQ (e53a) and the function that
             // sends commands to the LD-V1000 (E4C1) are
@@ -211,7 +210,7 @@ Uint8 cobraconv::cpu_mem_read(Uint16 addr)
 
             // Command strobe is active when bit 5 is set (see E50E in ROM code
             // for example)
-            if (ldv1000_is_command_strobe_active()) {
+            if (ldv1000::is_command_strobe_active()) {
                 banks[3] |= 0x20;
             } else {
                 banks[3] &= ~0x20;
@@ -237,12 +236,11 @@ Uint8 cobraconv::cpu_mem_read(Uint16 addr)
 
         // laserdisc player interface
         else if (addr == 0x1004) {
-            result = read_ldv1000();
+            result = ldv1000::read();
         }
 
         else {
-            sprintf(s, "CPU 0: Unmapped read from %x", addr);
-            printline(s);
+            LOGW << fmt("CPU 0: Unmapped read from %x", addr);
         }
         break;
     case 1:
@@ -256,8 +254,7 @@ Uint8 cobraconv::cpu_mem_read(Uint16 addr)
         }
 
         else {
-            sprintf(s, "CPU 1: Unmapped read from %x", addr);
-            printline(s);
+            LOGW << fmt("CPU 1: Unmapped read from %x", addr);
         }
         break;
     }
@@ -266,9 +263,7 @@ Uint8 cobraconv::cpu_mem_read(Uint16 addr)
 
 void cobraconv::cpu_mem_write(Uint16 addr, Uint8 value)
 {
-    char s[81] = {0};
-
-    switch (cpu_getactivecpu()) {
+    switch (cpu::get_active()) {
     case 0:
         // main ram
         if (addr <= 0x0fff) {
@@ -281,9 +276,7 @@ void cobraconv::cpu_mem_write(Uint16 addr, Uint8 value)
         //	else if (addr >= 0x2000 && addr <= 0x2fff)
         {
             if (value != m_cpumem[addr]) {
-                //				sprintf(s, "Video write to %x with value %x", addr,
-                //value);
-                //				printline(s);
+                LOGD << fmt("Video write to %x with value %x", addr, value);
                 m_video_overlay_needs_update = true;
             }
         }
@@ -321,7 +314,7 @@ void cobraconv::cpu_mem_write(Uint16 addr, Uint8 value)
         // sound core/mixer)
         else if (addr == 0x1005) {
             m_sounddata_latch = value;
-            cpu_generate_irq(1, 0); // generate an interrupt on the sound cpu
+            cpu::generate_irq(1, 0); // generate an interrupt on the sound cpu
         }
 
         else if (addr == 0x1003) {
@@ -330,30 +323,27 @@ void cobraconv::cpu_mem_write(Uint16 addr, Uint8 value)
 
         // LD player data bus
         else if (addr == 0x1004) {
-            write_ldv1000(value);
+            ldv1000::write(value);
         }
 
         // main rom
         else if (addr >= 0x4000) {
-            sprintf(s, "Error! write to main rom at %x", addr);
-            printline(s);
+            LOGW << fmt("write to main rom at %x", addr);
         }
 
         else {
-            sprintf(s, "CPU 0: Unmapped write to %x with value %x", addr, value);
-            printline(s);
+            LOGW << fmt("CPU 0: Unmapped write to %x with value %x", addr, value);
         }
 
         m_cpumem[addr] = value;
         break;
     case 1:
         if (addr == 0x2000) {
-            audio_write_ctrl_data(m_soundchip_address_latch, value, m_soundchip_id);
+            sound::write_ctrl_data(m_soundchip_address_latch, value, m_soundchip_id);
         } else if (addr == 0x4000) {
             m_soundchip_address_latch = value;
         } else {
-            sprintf(s, "CPU 1: Unmapped write to %x with value %x", addr, value);
-            printline(s);
+            LOGW << fmt("CPU 1: Unmapped write to %x with value %x", addr, value);
         }
         m_cpumem2[addr] = value;
         break;
@@ -395,13 +385,13 @@ void cobraconv::palette_calculate()
         // temp_color.b = (Uint8) (255 * pow((static_cast<double>(temp_color.b))
         // / 255, 1/COBRACONV_GAMMA));
 
-        palette_set_color(i, temp_color);
+        palette::set_color(i, temp_color);
     }
 
     // transparent color default to 0, so no change needed
 }
 
-void cobraconv::video_repaint()
+void cobraconv::repaint()
 {
     /*	if (palette_updated)
     {
@@ -453,7 +443,7 @@ bool cobraconv::set_bank(unsigned char which_bank, unsigned char value)
         banks[2] = (unsigned char)(value ^ 0xFF); // switches are active low
         break;
     default:
-        printline("ERROR: Bank specified is out of range!");
+        LOGW << "Bank specified is out of range!";
         result = false;
         break;
     }
@@ -493,11 +483,11 @@ void cobraconv::input_enable(Uint8 move)
         break;
     case SWITCH_COIN1:
         banks[3] &= ~0x04;
-        cpu_generate_nmi(0);
+        cpu::generate_nmi(0);
         break;
     case SWITCH_COIN2:
         banks[3] &= ~0x02; // right coin chute is bit 1 (see a97f)
-        cpu_generate_nmi(0);
+        cpu::generate_nmi(0);
         break;
     case SWITCH_SERVICE:
         //		banks[3] &= ~0x08;
@@ -507,7 +497,7 @@ void cobraconv::input_enable(Uint8 move)
                           // for tilt detector)
         break;
     default:
-        //		printline("Error, bug in move enable");
+        LOGW << "bug in move enable";
         break;
     }
 }
@@ -557,15 +547,15 @@ void cobraconv::input_disable(Uint8 move)
         banks[3] &= ~0x01;
         break;
     default:
-        //		printline("Error, bug in move enable");
+        LOGW << "bug in move enable";
         break;
     }
 }
 
 void cobraconv::OnVblank()
 {
-    video_blit();
-    ldv1000_report_vsync();
+    blit();
+    ldv1000::report_vsync();
 }
 
 void cobraconv::OnLDV1000LineChange(bool bIsStatus, bool bIsEnabled)
@@ -582,7 +572,7 @@ void cobraconv::OnLDV1000LineChange(bool bIsStatus, bool bIsEnabled)
     //  status strobe is good enough for now.
     if ((bIsStatus) && (bIsEnabled)) {
         // do an IRQ
-        cpu_generate_irq(0, 0);
+        cpu::generate_irq(0, 0);
     }
 }
 

@@ -1,5 +1,5 @@
 /*
- * firefox.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Mark Broadhead
  *
@@ -27,6 +27,7 @@
 #include "config.h"
 
 #include <string.h>
+#include <plog/Log.h>
 #include "firefox.h"
 #include "../cpu/cpu.h"
 #include "../cpu/mc6809.h"
@@ -89,10 +90,10 @@
 
 firefox::firefox()
 {
-    struct cpudef cpu;
+    struct cpu::def cpu;
 
     m_shortgamename = "firefox";
-    memset(&cpu, 0, sizeof(struct cpudef));
+    memset(&cpu, 0, sizeof(struct cpu::def));
     memset(banks, 0xFF, 4); // fill banks with 0xFF's
                             //	banks[0] = 0xfb;
     banks[1]   = 0x1f;
@@ -112,7 +113,7 @@ firefox::firefox()
                               // bottom 16 lines are hidden)
     m_palette_color_count = FIREFOX_COLORS;
 
-    cpu.type       = CPU_M6809;
+    cpu.type       = cpu::type::M6809;
     cpu.hz         = FIREFOX_CPU_HZ;
     cpu.nmi_period = 0; // firefox has no NMI
 
@@ -132,7 +133,7 @@ firefox::firefox()
     cpu.initial_pc        = 0;
     cpu.must_copy_context = false; // set to true for multiple 6809's
     cpu.mem = m_cpumem;
-    add_cpu(&cpu); // add a 6809 cpu
+    cpu::add(&cpu); // add a 6809 cpu
 
     ad_converter_channel = 0;
     current_bank         = 0x0000;
@@ -162,7 +163,7 @@ firefox::firefox()
     // UPDATE : this is too slow so I'll handle the DAK delay differently
     // This runs 50 cycles each cpu iteration, which I need in order to have the
     // DAK work in a timely way
-    //	cpu_change_interleave(FIREFOX_CPU_HZ / 50000);
+    //	cpu::change_interleave(FIREFOX_CPU_HZ / 50000);
 }
 
 firefoxa::firefoxa()
@@ -189,7 +190,7 @@ firefoxa::firefoxa()
 
 bool firefox::init()
 {
-    cpu_init();
+    cpu::init();
     g_ldp->pre_play(); // the VP931 starts playing automatically
     return true;
 }
@@ -288,15 +289,15 @@ Uint8 firefox::cpu_mem_read(Uint16 addr)
         result = 0x00;
 
         // DAV = active low (see E4B9 for support to this theory)
-        if (!vp931_is_dav_active()) result |= (1 << 7);
+        if (!vp931::is_dav_active()) result |= (1 << 7);
 
         // DAK is active high, DAK low means the buffer is full
         // (the firefox schematics reverse this and view things from a FULL,
         // active-low viewpoint)
-        if (vp931_is_dak_active()) result |= (1 << 6);
+        if (vp931::is_dak_active()) result |= (1 << 6);
 
         // I _think_ this should always be high
-        if (vp931_is_oprt_active()) result |= (1 << 5);
+        if (vp931::is_oprt_active()) result |= (1 << 5);
     }
 
     // Option Sw 1
@@ -312,8 +313,8 @@ Uint8 firefox::cpu_mem_read(Uint16 addr)
     // Read VP931 data (DREAD)
     //  and disabled RDDSK (sets it high)
     else if (addr == 0x4105) {
-        result = read_vp931();
-        vp931_change_read_line(false);
+        result = vp931::read();
+        vp931::change_read_line(false);
     }
 
     // RDSOUND
@@ -330,7 +331,7 @@ Uint8 firefox::cpu_mem_read(Uint16 addr)
             result = banks[5];
             break;
         default:
-            printline("Invalid A/D Converter channel");
+            LOGW << "Invalid A/D Converter channel";
             break;
         }
     }
@@ -408,7 +409,7 @@ void firefox::cpu_mem_write(Uint16 addr, Uint8 value)
     // DSKREAD
     // (makes RDDSK lo, ie enables it)
     else if (addr == 0x4218) {
-        vp931_change_read_line(true);
+        vp931::change_read_line(true);
     }
 
     // Start A/D Converter Channel 0/1 (ADCSTART)
@@ -447,22 +448,22 @@ void firefox::cpu_mem_write(Uint16 addr, Uint8 value)
             break;
         case 6: // rstdsk
             // rstdsk is active low
-            vp931_change_reset_line(D == 0);
+            vp931::change_reset_line(D == 0);
             break;
         case 7: // wrdsk
             // wrdsk is active low
             if (!D) {
-                write_vp931(m_u8DskLatch); // this must come before the write
+                vp931::write(m_u8DskLatch); // this must come before the write
                                            // line is enabled
-                vp931_change_write_line(true);
+                vp931::change_write_line(true);
             }
             // else the write line is being disabled
             else {
-                vp931_change_write_line(false);
+                vp931::change_write_line(false);
             }
             break;
         default:
-            printline("Firefox ERROR 0x4280-0x4287 section");
+            LOGW << "Firefox ERROR 0x4280-0x4287 section";
             break;
         }
     }
@@ -478,7 +479,7 @@ void firefox::cpu_mem_write(Uint16 addr, Uint8 value)
         } else {
             sprintf(s, "Led %x on", (addr & 0x03) + 1);
         }
-        printline(s);
+        LOGD << s;
     }
 
     // Rom paging @ 3000 (WRTREG)
@@ -508,8 +509,7 @@ void firefox::cpu_mem_write(Uint16 addr, Uint8 value)
             //			printline(s);
             break;
         default:
-            sprintf(s, "Invalid bank switch, %x", value);
-            printline(s);
+            LOGW << fmt("Invalid bank switch, %x", value);
             break;
         }
     }
@@ -525,12 +525,11 @@ void firefox::cpu_mem_write(Uint16 addr, Uint8 value)
 
     // Program ROM
     else if (addr >= 0x4400) {
-        printline("ERROR: Write to program rom!");
+        LOGW << "Write to program rom!";
     }
 
     else {
-        //		sprintf(s, "Unmapped write to %x with %x", addr, value);
-        //		printline(s);
+        LOGW << fmt("Unmapped write to %x with %x", addr, value);
     }
 
     m_cpumem[addr] = value;
@@ -543,16 +542,16 @@ void firefox::palette_calculate()
         color.r = m_cpumem[0x2c00 + x];
         color.g = m_cpumem[0x2d00 + x];
         color.b = m_cpumem[0x2e00 + x] & 0xfd;
-        palette_set_color(x, color);
+        palette::set_color(x, color);
     }
 }
 
 // updates firefox's video
-void firefox::video_repaint()
+void firefox::repaint()
 {
     if (palette_modified) {
         palette_calculate();
-        palette_finalize();
+        palette::finalize();
     }
 
     for (int charx = 0; charx < 64; charx++) {
@@ -682,12 +681,12 @@ void firefox::input_disable(Uint8 move)
 
 void firefox::OnVblank()
 {
-    video_blit();
+    blit();
 
     // not really used for emulated vblank because the timing is still somewhat
     // unknown
 
-    vp931_report_vsync();
+    vp931::report_vsync();
 }
 
 // used to set dip switch values
@@ -703,7 +702,7 @@ bool firefox::set_bank(unsigned char which_bank, unsigned char value)
         banks[3] = (unsigned char)(value ^ 0xFF); // switches are active low
         break;
     default:
-        printline("ERROR: Bank specified is out of range!");
+        LOGW << "Bank specified is out of range!";
         result = false;
         break;
     }

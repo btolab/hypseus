@@ -1,5 +1,5 @@
 /*
- * lgp.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2005 Mark Broadhead
  *
@@ -47,10 +47,10 @@
 
 lgp::lgp()
 {
-    struct cpudef cpu;
+    struct cpu::def cpu;
 
     m_shortgamename = "lgp";
-    memset(&cpu, 0, sizeof(struct cpudef));
+    memset(&cpu, 0, sizeof(struct cpu::def));
     memset(m_cpumem, 0x00, 0x10000);  // making sure m_cpumem[] is zero'd out
     memset(m_cpumem2, 0x00, 0x10000); // making sure m_cpumem2[] is zero'd out
     memset(banks, 0x00, 7);           // fill banks with 0xFF's
@@ -61,31 +61,31 @@ lgp::lgp()
     m_video_overlay_height = LGP_OVERLAY_H;
     m_palette_color_count  = LGP_COLOR_COUNT;
 
-    cpu.type              = CPU_Z80;
+    cpu.type              = cpu::type::Z80;
     cpu.hz                = 5000000;
     cpu.irq_period[0]     = 16.6666; // interrupt from vblank (60hz)
     cpu.nmi_period        = 0;       // nmi from sound chip?
     cpu.initial_pc        = 0;
     cpu.must_copy_context = true;
     cpu.mem = m_cpumem;
-    add_cpu(&cpu); // add a z80
+    cpu::add(&cpu); // add a z80
 
-    cpu.type              = CPU_Z80;
+    cpu.type              = cpu::type::Z80;
     cpu.hz                = 5000000;
     cpu.irq_period[0]     = 0;
     cpu.nmi_period        = 0;
     cpu.initial_pc        = 0;
     cpu.must_copy_context = true;
     cpu.mem = m_cpumem2;
-    add_cpu(&cpu); // add a z80
+    cpu::add(&cpu); // add a z80
 
-    struct sounddef soundchip;
-    soundchip.type  = SOUNDCHIP_AY_3_8910;
+    struct sound::chip soundchip;
+    soundchip.type  = sound::CHIP_AY_3_8910;
     soundchip.hz    = 2500000; // complete guess
-    m_soundchip1_id = add_soundchip(&soundchip);
-    m_soundchip2_id = add_soundchip(&soundchip);
-    m_soundchip3_id = add_soundchip(&soundchip);
-    m_soundchip4_id = add_soundchip(&soundchip);
+    m_soundchip1_id = sound::add_chip(&soundchip);
+    m_soundchip2_id = sound::add_chip(&soundchip);
+    m_soundchip3_id = sound::add_chip(&soundchip);
+    m_soundchip4_id = sound::add_chip(&soundchip);
 
     m_transparent_color = 0;
     m_ldp_write_latch   = 0xff;
@@ -119,9 +119,9 @@ void lgp::do_irq(unsigned int which_irq)
     if (which_irq == 0) {
         // Redraws the screen (if needed) on interrupt
         recalc_palette();
-        m_ldp_read_latch = read_ldv1000();
-        write_ldv1000(m_ldp_write_latch);
-        video_blit();
+        m_ldp_read_latch = ldv1000::read();
+        ldv1000::write(m_ldp_write_latch);
+        blit();
         Z80_ASSERT_IRQ;
     }
 }
@@ -136,7 +136,7 @@ Uint8 lgp::cpu_mem_read(Uint16 addr)
     Uint8 result = 0;
     char s[81]   = {0};
 
-    switch (cpu_getactivecpu()) {
+    switch (cpu::get_active()) {
     case 0:
         result = m_cpumem[addr];
         // patch rom to boot faster
@@ -202,7 +202,7 @@ void lgp::cpu_mem_write(Uint16 addr, Uint8 value)
 {
     char s[81] = {0};
 
-    switch (cpu_getactivecpu()) {
+    switch (cpu::get_active()) {
     case 0:
         m_cpumem[addr] = value;
         // main rom
@@ -259,25 +259,25 @@ void lgp::cpu_mem_write(Uint16 addr, Uint8 value)
         else if (addr == 0x8400) {
             m_soundchip1_address_latch = value;
         } else if (addr == 0x8401) {
-            audio_write_ctrl_data(m_soundchip1_address_latch, value, m_soundchip1_id);
+            sound::write_ctrl_data(m_soundchip1_address_latch, value, m_soundchip1_id);
         }
         // AY-3-8910 #2
         else if (addr == 0x8402) {
             m_soundchip2_address_latch = value;
         } else if (addr == 0x8403) {
-            audio_write_ctrl_data(m_soundchip2_address_latch, value, m_soundchip2_id);
+            sound::write_ctrl_data(m_soundchip2_address_latch, value, m_soundchip2_id);
         }
         // AY-3-8910 #3
         else if (addr == 0x8404) {
             m_soundchip3_address_latch = value;
         } else if (addr == 0x8405) {
-            audio_write_ctrl_data(m_soundchip3_address_latch, value, m_soundchip3_id);
+            sound::write_ctrl_data(m_soundchip3_address_latch, value, m_soundchip3_id);
         }
         // AY-3-8910 #1
         else if (addr == 0x8406) {
             m_soundchip4_address_latch = value;
         } else if (addr == 0x8407) {
-            audio_write_ctrl_data(m_soundchip4_address_latch, value, m_soundchip4_id);
+            sound::write_ctrl_data(m_soundchip4_address_latch, value, m_soundchip4_id);
         }
         // unknown
         else if (addr >= 0x8800 && addr <= 0x8803) {
@@ -332,7 +332,7 @@ function is unimplemented!", port, value);
 }
 
 // updates lgp's video
-void lgp::video_repaint()
+void lgp::repaint()
 {
     // This should be much faster
     SDL_FillRect(m_video_overlay[m_active_video_overlay], NULL, m_transparent_color);
@@ -402,9 +402,9 @@ void lgp::recalc_palette()
         temp_color.r = static_cast<Uint8>((i * 23) % 256);
         temp_color.g = static_cast<Uint8>((i * 100) % 256);
         temp_color.b = static_cast<Uint8>((i * 34) % 256);
-        palette_set_color(i, temp_color);
+        palette::set_color(i, temp_color);
     }
-    palette_finalize();
+    palette::finalize();
 
     palette_modified = false;
 }
@@ -431,7 +431,7 @@ void lgp::input_enable(Uint8 move)
         break;
     case SWITCH_COIN1:
         banks[0] = 0xf0;
-        cpu_generate_nmi(0);
+        cpu::generate_nmi(0);
         break;
     case SWITCH_COIN2:
         break;

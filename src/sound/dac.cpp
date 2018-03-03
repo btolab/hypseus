@@ -1,5 +1,5 @@
 /*
-* dac.cpp
+* ____ DAPHNE COPYRIGHT NOTICE ____
 *
 * Copyright (C) 2005 Matt Ownby
 *
@@ -22,17 +22,20 @@
 
 #include "config.h"
 
+#include "../io/mpo_mem.h"
 #include "sound.h"  // for get frequency stuff
 #include <string.h> // for memset
-#include "../io/mpo_mem.h"
 
 #ifdef DEBUG
 #include "../io/conout.h"
-#include "../io/mpo_fileio.h"
 #include "../cpu/cpu.h"
+#include "../io/mpo_fileio.h"
 #include "../io/numstr.h"
 #include <assert.h>
 #endif
+
+namespace dac
+{
 
 // how many DACs have been created
 unsigned int g_uDACCount = 0;
@@ -82,13 +85,13 @@ mpo_io *sample_io = NULL;
 #endif
 
 // init callback
-int dac_init(unsigned int uCpuFreq)
+int init(unsigned int uCpuFreq)
 {
 
 #ifdef DEBUG
     // a couple of assumptions...
-    assert(AUDIO_CHANNELS == 2);
-    assert(AUDIO_BYTES_PER_SAMPLE == 4);
+    assert(sound::CHANNELS == 2);
+    assert(sound::BYTES_PER_SAMPLE == 4);
     assert(g_uDACCount == 0); // not designed to handle more than 1 DAC
 #endif
 
@@ -104,13 +107,13 @@ int dac_init(unsigned int uCpuFreq)
     }
 
     g_uCyclesPerInterval = uCpuFreq / 1000; // each interval is 1 ms
-    g_dSamplesPerCycle   = ((double)AUDIO_FREQ) / uCpuFreq;
+    g_dSamplesPerCycle   = ((double)sound::FREQ) / uCpuFreq;
 
     ++g_uDACCount;
     return 0;
 }
 
-void dac_ctrl_data(unsigned int uCyclesSinceLastChange, unsigned int u8Byte, int internal_id)
+void ctrl_data(unsigned int uCyclesSinceLastChange, unsigned int u8Byte, int internal_id)
 {
 #ifdef DEBUG
     assert(u8Byte <= 255); // make sure it is really 8-bit
@@ -158,11 +161,11 @@ void dac_ctrl_data(unsigned int uCyclesSinceLastChange, unsigned int u8Byte, int
 }
 
 // called from sound mixer to get audio stream
-void dac_get_stream(Uint8 *stream, int length, int internal_id)
+void get_stream(Uint8 *stream, int length, int internal_id)
 {
 #ifdef DEBUG
     // make sure this is in the proper format (stereo 16-bit)
-    assert((length % AUDIO_BYTES_PER_SAMPLE) == 0);
+    assert((length % sound::BYTES_PER_SAMPLE) == 0);
 #endif
 
     /*
@@ -205,7 +208,7 @@ void dac_get_stream(Uint8 *stream, int length, int internal_id)
     }
 
     // length is in bytes, we want to know how many samples we've just sent
-    unsigned int total_samples = (unsigned int)length / AUDIO_BYTES_PER_SAMPLE;
+    unsigned int total_samples = (unsigned int)length / sound::BYTES_PER_SAMPLE;
 
     // if we have leftover samples
     if (g_uDACSampleCount > total_samples) {
@@ -228,4 +231,5 @@ void dac_get_stream(Uint8 *stream, int length, int internal_id)
     // a new interval begins now
     g_uCyclesUsedThisInterval  = 0;
     g_uSampleCountThisInterval = 0;
+}
 }

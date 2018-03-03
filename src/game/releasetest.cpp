@@ -1,5 +1,5 @@
 /*
- * releasetest.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2005 Matt Ownby
  *
@@ -28,18 +28,13 @@
 
 #include "config.h"
 
-#ifdef _MSC_VER
-#pragma warning(disable : 4786) // disable warning about truncating to 255 in
-                                // debug info
-#endif
-
 #include "releasetest.h"
 #include "../io/conout.h"
 #include "../io/numstr.h"
 #include "../io/input.h"
 #include "../io/fileparse.h"
 #include "../io/mpo_mem.h"
-#include "../daphne.h"
+#include "../hypseus.h"
 #include "../timer/timer.h"
 #include "../video/rgb2yuv.h"
 #include "../video/video.h" // for draw_string
@@ -149,7 +144,7 @@ void releasetest::start()
     printline(msg.c_str());
 }
 
-void releasetest::video_repaint()
+void releasetest::repaint()
 {
     unsigned int i = 0;
     Uint32 cur_w   = g_ldp->get_discvideo_width() >> 1; // width overlay should be
@@ -165,8 +160,8 @@ void releasetest::video_repaint()
         if (g_ldp->lock_overlay(1000)) {
             m_video_overlay_width  = cur_w;
             m_video_overlay_height = cur_h;
-            video_shutdown();
-            if (!video_init()) {
+            shutdown_video();
+            if (!init_video()) {
                 printline(
                     "Fatal Error, trying to re-create the surface failed!");
                 set_quitflag();
@@ -290,11 +285,11 @@ void releasetest::test_framefile_parse()
     // test 2
     const char *FF2     = "../appendage\r0		blah.m2v";
     const char *FFPATH2 = "C:\\Documents and Settings\\Fisher Pricer\\My "
-                          "Documents\\My Games\\Daphne "
+                          "Documents\\My Games\\Hypseus "
                           "Ver0.99.6\\framefile.txt";
     res = vldp->parse_framefile(FF2, FFPATH2, sPath, ffTmp, f_idx, MAX_MPEG_FILES, sErrMsg);
     logtest(res && (sPath == "C:/Documents and Settings/Fisher Pricer/My "
-                             "Documents/My Games/Daphne "
+                             "Documents/My Games/Hypseus "
                              "Ver0.99.6/../appendage/") &&
                 (ffTmp[0].name == "blah.m2v") && (ffTmp[0].frame == 0) && (f_idx == 1),
             "FrameFile Parse #2");
@@ -445,7 +440,7 @@ void releasetest::test_vldp()
     if (g_ldp->pre_init()) {
         g_ldp->pre_search("00001", true); // render an image to the screen
         m_video_overlay_needs_update = true;
-        video_blit(); // re-size our video overlay if necessary
+        blit(); // re-size our video overlay if necessary
         printline("Beginning VLDP comprehensive test ...");
         list<string> lstrPassed, lstrFailed;
         vldp->run_tests(lstrPassed, lstrFailed);
@@ -500,7 +495,7 @@ void releasetest::test_vldp()
         printline("Trying to seek to valid 640x480 frame");
         logtest(g_ldp->pre_search("30000", true), "VLDP Seek to 640x480 Frame");
         m_video_overlay_needs_update = true;
-        video_blit(); // resize-video overlay if needed
+        blit(); // resize-video overlay if needed
         logtest(m_video_overlay_width == 320, "Overlay is 320 wide");
 
         // g_ldp->think_delay(1000);	// let them see it ..
@@ -508,7 +503,7 @@ void releasetest::test_vldp()
         printline("Trying to seek to valid 720x480 frame");
         logtest(g_ldp->pre_search("5", true), "VLDP Seek to 720x480 Frame");
         m_video_overlay_needs_update = true;
-        video_blit(); // resize-video overlay if needed
+        blit(); // resize-video overlay if needed
         logtest(m_video_overlay_width == 360, "Overlay is 360 wide");
 
         // g_ldp->think_delay(1000);	// let them see it ..
@@ -527,7 +522,7 @@ void releasetest::test_vldp()
         g_ldp->pre_search("30000", true); // make overlay go back to 640x480 for
                                           // future tests
         m_video_overlay_needs_update = true;
-        video_blit(); // resize-video overlay if needed
+        blit(); // resize-video overlay if needed
 
     } else {
         printline("Cannot run 2nd set of VLDP tests due to missing file(s)");
@@ -558,7 +553,7 @@ void releasetest::test_vldp_render()
         report_mpeg_dimensions_callback(width, height);
 
         m_video_overlay_needs_update = true;
-        video_blit(); // prepare our video overlay for testing
+        blit(); // prepare our video overlay for testing
 
         printline("Beginning VLDP Render test...");
         g_filter_type = FILTER_NONE; // no filter for this test
@@ -619,52 +614,52 @@ void releasetest::test_samples()
     //	unsigned int uTimer = GET_TICKS();
 
     printline("Playing samples in quick succession..");
-    sound_play(1);
+    sound::play(1);
     make_delay(100);
-    sound_play(2);
+    sound::play(2);
     make_delay(100);
-    sound_play(0);
+    sound::play(0);
     make_delay(WAIT_MS);
 
     printline("Playing 1 sample alone..");
-    sound_play(0);
+    sound::play(0);
     make_delay(WAIT_MS);
 
     printline("Playing 2 samples together...");
-    sound_play(0);
-    sound_play(1);
+    sound::play(0);
+    sound::play(1);
     make_delay(WAIT_MS);
 
     printline("Playing 1 sample twice...");
-    sound_play(0);
-    sound_play(0);
+    sound::play(0);
+    sound::play(0);
     make_delay(WAIT_MS);
 
     printline("Playing 1 sample thrice...");
-    sound_play(0);
-    sound_play(0);
-    sound_play(0);
+    sound::play(0);
+    sound::play(0);
+    sound::play(0);
     make_delay(WAIT_MS);
 
     printline("Playing 3 samples simultaneously...");
-    sound_play(0);
-    sound_play(1);
-    sound_play(2);
+    sound::play(0);
+    sound::play(1);
+    sound::play(2);
     make_delay(WAIT_MS);
 
     printline("Playing 1 sample");
-    sound_play(1);
+    sound::play(1);
     make_delay(WAIT_MS);
 
     printline("Playing 2 samples");
-    sound_play(1);
-    sound_play(1);
+    sound::play(1);
+    sound::play(1);
     make_delay(WAIT_MS);
 
     printline("Playing 3 samples");
-    sound_play(1);
-    sound_play(1);
-    sound_play(1);
+    sound::play(1);
+    sound::play(1);
+    sound::play(1);
     make_delay(WAIT_MS);
 }
 
@@ -679,10 +674,10 @@ void releasetest::test_sound_mixing()
     unsigned char u8BufClipped[4] = {0xFF, 0x7F, 0, 0}; // maximum value
     unsigned char u8Stream[4];
 
-    int iSlot = samples_play_sample(u8Buf, sizeof(u8Buf), 2, -1, NULL);
+    int iSlot = samples::play(u8Buf, sizeof(u8Buf), 2, -1, NULL);
 
     if (iSlot >= 0) {
-        samples_get_stream(u8Stream, 4, sizeof(u8Stream));
+        samples::get_stream(u8Stream, 4, sizeof(u8Stream));
 
         // these should be the same ...
         if (memcmp(u8Stream, u8Buf, sizeof(u8Buf)) == 0) {
@@ -693,10 +688,10 @@ void releasetest::test_sound_mixing()
     logtest(bTestPassed, "Sample Mixing");
 
     bTestPassed = false;
-    iSlot = samples_play_sample(u8Buf, sizeof(u8Buf), 2, -1, NULL);
+    iSlot = samples::play(u8Buf, sizeof(u8Buf), 2, -1, NULL);
     if (iSlot >= 0) {
         // test the sample mixer passed through the main audio mixer
-        audio_callback(NULL, u8Stream, sizeof(u8Stream));
+        sound::callback(NULL, u8Stream, sizeof(u8Stream));
 
         // these should be the same ...
         if (memcmp(u8Stream, u8Buf, sizeof(u8Buf)) == 0) {
@@ -708,11 +703,11 @@ void releasetest::test_sound_mixing()
 
     bTestPassed = false;
     // play the sample twice to ensure that it exceeds the threshold
-    iSlot      = samples_play_sample(u8Buf, sizeof(u8Buf), 2, -1, NULL);
-    int iSlot2 = samples_play_sample(u8Buf, sizeof(u8Buf), 2, -1, NULL);
+    iSlot      = samples::play(u8Buf, sizeof(u8Buf), 2, -1, NULL);
+    int iSlot2 = samples::play(u8Buf, sizeof(u8Buf), 2, -1, NULL);
     if ((iSlot >= 0) && (iSlot2 >= 0)) {
         // test the sample mixer passed through the main audio mixer
-        audio_callback(NULL, u8Stream, sizeof(u8Stream));
+        sound::callback(NULL, u8Stream, sizeof(u8Stream));
 
         // these should be the same ...
         if (memcmp(u8Stream, u8BufClipped, sizeof(u8Buf)) == 0) {

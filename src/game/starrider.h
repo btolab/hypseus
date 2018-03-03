@@ -1,5 +1,5 @@
 /*
- * starrider.h
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Mark Broadhead
  *
@@ -41,7 +41,7 @@ class starrider : public game
     void input_disable(Uint8);
     bool set_bank(unsigned char, unsigned char);
     void palette_calculate();
-    void video_repaint(); // function to repaint video
+    void repaint(); // function to repaint video
 
   private:
     int current_bank;

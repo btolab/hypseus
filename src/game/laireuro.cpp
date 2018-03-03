@@ -1,5 +1,5 @@
 /*
- * laireuro.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001-2007 Mark Broadhead
  *
@@ -42,32 +42,32 @@ Uint8 g_soundchip_id;
 
 laireuro::laireuro()
 {
-    struct cpudef cpu;
-    struct sounddef sound;
+    struct cpu::def cpu;
+    struct sound::chip sound;
 
     memset(&g_ctc, 0, sizeof(ctc_chip));
 
     m_shortgamename = "laireuro";
-    memset(&cpu, 0, sizeof(struct cpudef));
+    memset(&cpu, 0, sizeof(struct cpu::def));
     memset(m_banks, 0xFF, 4); // m_banks are active low
 
     m_disc_fps  = 25.0;
     m_game_type = GAME_LAIREURO;
 
-    cpu.type              = CPU_Z80;
+    cpu.type              = cpu::type::Z80;
     cpu.hz                = LAIREURO_CPU_HZ;
     cpu.nmi_period        = 1000 / 50;
     cpu.must_copy_context = false;
     cpu.mem = m_cpumem;
-    add_cpu(&cpu);
+    cpu::add(&cpu);
 
-    cpu_change_interleave(100); // make it update the irqs every 1/3 of a ms
+    cpu::change_interleave(100); // make it update the irqs every 1/3 of a ms
 
     m80_set_irq_callback(laireuro_irq_callback);
 
-    memset(&sound, 0, sizeof(sound));
-    sound.type     = SOUNDCHIP_TONEGEN;
-    g_soundchip_id = add_soundchip(&sound);
+    memset(&sound, 0, sizeof(sound::chip));
+    sound.type     = sound::CHIP_TONEGEN;
+    g_soundchip_id = sound::add_chip(&sound);
 
     m_video_overlay_width       = LAIREURO_OVERLAY_W;
     m_video_overlay_height      = LAIREURO_OVERLAY_H;
@@ -126,7 +126,7 @@ void laireuro::do_irq(Uint32 which)
                 Z80_ASSERT_IRQ;
             }
         } else {
-            if (vp932_data_available()) {
+            if (vp932::data_available()) {
                 g_int_vec = g_dart.int_vector | 0x0c;
                 Z80_ASSERT_IRQ;
             }
@@ -138,7 +138,7 @@ void laireuro::do_irq(Uint32 which)
 void laireuro::do_nmi()
 {
     // Redraws the screen (if needed) on interrupt
-    video_blit();
+    blit();
 
     // Italian DL doesn't like it if coins held too long
     if (~(m_banks[1] & 0x04)) {
@@ -323,7 +323,7 @@ Uint8 laireuro::port_read(Uint16 port)
         break;
     // UART (SIO)
     case 0x80:
-        result = vp932_read();
+        result = vp932::read();
         break;
     case 0x81:
     case 0x82:
@@ -374,14 +374,14 @@ void laireuro::palette_calculate()
     colors[7].b = 255;
 
     for (int x = 0; x < LAIREURO_COLOR_COUNT; x++) {
-        palette_set_color(x, colors[x]);
+        palette::set_color(x, colors[x]);
     }
-    palette_set_transparency(0, false);
-    palette_set_transparency(8, true);
+    palette::set_transparency(0, false);
+    palette::set_transparency(8, true);
 }
 
 // updates laireuro's video
-void laireuro::video_repaint()
+void laireuro::repaint()
 {
     int charx_offset = 1;
     int chary_offset = 0;
@@ -569,7 +569,7 @@ void ctc_write(Uint8 channel, Uint8 value)
         // Reset
         if (value & 0x02) {
             g_ctc.channels[channel].time_const = 0;
-            cpu_change_irq(0, channel, 0);
+            cpu::change_irq(0, channel, 0);
         }
         ctc_update_period(channel);
     }
@@ -639,7 +639,7 @@ void dart_write(bool b, bool command, Uint8 data)
         }
     } else {
         if (data && !b) {
-            vp932_write(data);
+            vp932::write(data);
         } else {
         }
     }
@@ -665,7 +665,7 @@ void ctc_update_period(Uint8 channel)
     }
 
     if (g_ctc.channels[channel].interrupt) {
-        cpu_change_irq(0, channel, new_period);
+        cpu::change_irq(0, channel, new_period);
 #ifdef DEBUG
         char s[81] = {0};
         sprintf(s, "Set up Irq %x with period of %f", channel, new_period);
@@ -673,18 +673,18 @@ void ctc_update_period(Uint8 channel)
 #endif
     } else {
         // when interrupts are disabled...
-        cpu_change_irq(0, channel, 0);
+        cpu::change_irq(0, channel, 0);
         if (channel == 2) {
             // the baud rate gets divided by the UART by 16, but we need two
             // interrupts per
             // transaction, one for input and one for output. Also baud is bits
             // per second,
             // and we need bytes per second.
-            cpu_change_irq(0, 2, new_period * 16 * 8 / 2);
+            cpu::change_irq(0, 2, new_period * 16 * 8 / 2);
         }
         if (channel == 0) // sound
         {
-            audio_write_ctrl_data(1, (Uint32)(1000 / new_period / 2), g_soundchip_id);
+            sound::write_ctrl_data(1, (Uint32)(1000 / new_period / 2), g_soundchip_id);
         }
 #ifdef DEBUG
         char s[81] = {0};

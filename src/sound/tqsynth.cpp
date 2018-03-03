@@ -1,4 +1,6 @@
 /*
+ * ____ DAPHNE COPYRIGHT NOTICE ____
+ *
  * tqsynth.cpp -- Copyright (C) 2003 Garry Jordan
  *                A bare-bones phoneme-based voice synthesizer based on
  *                "rsynth" (C) 1994 by Nick Ing-Simmons, which utilized
@@ -29,14 +31,15 @@
 
 #include "config.h"
 
-#include <stdio.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <math.h>
-#include <string.h>
-#include "tqsynth.h"
 #include "../io/conout.h"
 #include "../io/mpo_mem.h"
+#include "tqsynth.h"
+#include <math.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <plog/Log.h>
 
 #define alv 0x00000001
 #define apr 0x00000002
@@ -79,6 +82,9 @@
 #ifndef PI
 #define PI 3.1415927
 #endif
+
+namespace tqsynth
+{
 
 typedef struct {
     float a;
@@ -2358,7 +2364,7 @@ struct this_type_doesnt_matter {
 } au_spec = {{0}};
 
 // Initialize startup parameters for synthesizer and audio.
-void tqsynth_init(int freq, Uint16 format, int channels, long base_F0)
+void init(int freq, Uint16 format, int channels, long base_F0)
 {
     double mSec_per_frame = 10;
 
@@ -2368,7 +2374,7 @@ void tqsynth_init(int freq, Uint16 format, int channels, long base_F0)
     klatt_global.glsource        = NATURAL;
     klatt_global.f0_flutter      = 0;
     klatt_global.synthesis_model = ALL_PARALLEL;
-    klatt_global.nspfr           = (long)((klatt_global.samrate * mSec_per_frame) / 1000);
+    klatt_global.nspfr = (long)((klatt_global.samrate * mSec_per_frame) / 1000);
 
     def_pars.F0hz10 = base_F0 ? base_F0 : 1330;
     def_pars.TLTdb  = 10;
@@ -2385,10 +2391,10 @@ void tqsynth_init(int freq, Uint16 format, int channels, long base_F0)
 }
 
 // Release a previously synthesized wave chunk.
-void tqsynth_free_chunk(Uint8 *pu8Buf) { MPO_FREE(pu8Buf); }
+void free_chunk(Uint8 *pu8Buf) { MPO_FREE(pu8Buf); }
 
 // Take a synthesized sample and convert to an SDL-ready wave chunk.
-bool audio_get_chunk(int num_samples, short *samples, sample_s *ptrSample)
+bool audio_get_chunk(int num_samples, short *samples, sound::sample_s *ptrSample)
 {
     bool bResult = false;
 
@@ -2415,7 +2421,7 @@ bool audio_get_chunk(int num_samples, short *samples, sample_s *ptrSample)
                 ptrSample->uLength = cvt.len_cvt;
                 bResult            = true;
             } else {
-                printline("tqsynth.cpp ERROR : SDL_ConvertAudio failed");
+                LOGE << "SDL_ConvertAudio failed";
                 MPO_FREE(cvt.buf);
             }
         }
@@ -2428,14 +2434,14 @@ bool audio_get_chunk(int num_samples, short *samples, sample_s *ptrSample)
             ptrSample->uLength = num_bytes;
             bResult            = true;
         } else
-            printline("tqsynth.cpp ERROR : MPO_MALLOC failed");
+            LOGE << "MPO_MALLOC failed";
     }
 
     return bResult;
 }
 
 // Take a string of phonemes and synthesize to wave data.
-bool tqsynth_phones_to_wave(char *phonemes, int len, sample_s *ptrSample)
+bool phones_to_wave(char *phonemes, int len, sound::sample_s *ptrSample)
 {
     darray_t elm;
     unsigned frames;
@@ -3257,7 +3263,7 @@ unsigned holmes(unsigned nelm, unsigned char *elm, short *samp_base)
     pars.B1phz = pars.B1hz = 60;
     pars.B2phz = pars.B2hz = 90;
     pars.B3phz = pars.B3hz = 150;
-    pars.B4phz = def_pars.B4phz;
+    pars.B4phz             = def_pars.B4phz;
 
     /* flag new utterance */
     parwave_init(&klatt_global);
@@ -3313,7 +3319,7 @@ unsigned holmes(unsigned nelm, unsigned char *elm, short *samp_base)
                     ntstress   = dur;
 
                     while (j <= nelm) {
-                        Elm_ptr e   = (j < nelm) ? &Elements[elm[j++]] : &Elements[0];
+                        Elm_ptr e = (j < nelm) ? &Elements[elm[j++]] : &Elements[0];
                         unsigned du = (j < nelm) ? elm[j++] : 0;
                         unsigned s  = (j < nelm) ? elm[j++] : 3;
 
@@ -3327,7 +3333,7 @@ unsigned holmes(unsigned nelm, unsigned char *elm, short *samp_base)
 
                             do {
                                 d += du;
-                                e  = (j < nelm) ? &Elements[elm[j++]] : &Elements[0];
+                                e = (j < nelm) ? &Elements[elm[j++]] : &Elements[0];
                                 du = elm[j++];
                             } while ((e->feat & vwl) && elm[j++] == s);
 
@@ -3351,16 +3357,16 @@ unsigned holmes(unsigned nelm, unsigned char *elm, short *samp_base)
                                                       (float)0, tstress, ntstress));
 
                 pars.AVdb = pars.AVpdb = (long)tp[av];
-                pars.AF    = (long)tp[af];
-                pars.FNZhz = (long)tp[fn];
-                pars.ASP   = (long)tp[asp];
-                pars.Aturb = (long)tp[avc];
+                pars.AF                = (long)tp[af];
+                pars.FNZhz             = (long)tp[fn];
+                pars.ASP               = (long)tp[asp];
+                pars.Aturb             = (long)tp[avc];
                 pars.B1phz = pars.B1hz = (long)tp[b1];
                 pars.B2phz = pars.B2hz = (long)tp[b2];
                 pars.B3phz = pars.B3hz = (long)tp[b3];
-                pars.F1hz = (long)tp[f1];
-                pars.F2hz = (long)tp[f2];
-                pars.F3hz = (long)tp[f3];
+                pars.F1hz              = (long)tp[f1];
+                pars.F2hz              = (long)tp[f2];
+                pars.F3hz              = (long)tp[f3];
 
 #define AMP_ADJ 20
                 // AMP_ADJ + is a bodge to get amplitudes up to klatt-compatible
@@ -3473,17 +3479,14 @@ void enter(const char *p, ...)
         if (e)
             *x++ = (char)(e - Elements);
         else {
-            char msg[80];
-
-            sprintf(msg, "tqsynth: Cannot find element %s", s);
-            printline(msg);
+            LOGW << fmt("Cannot find element %s", s);
         }
     }
 
     va_end(ap);
 
     buf[0] = (char)(x - buf) - 1;
-    x = (char *)malloc(buf[0] + 1);
+    x      = (char *)malloc(buf[0] + 1);
     memcpy(x, buf, buf[0] + 1);
     trie_insert(&phtoelm, p, x);
 }
@@ -3580,7 +3583,6 @@ unsigned phone_to_elm(char *phone, int n, darray_ptr elm)
                 phone_append(elm, stress);
             }
         } else {
-            char msg[80];
             char ch = *s++;
 
             switch (ch) {
@@ -3596,8 +3598,7 @@ unsigned phone_to_elm(char *phone, int n, darray_ptr elm)
             case '-': /* hyphen in input */
                 break;
             default:
-                sprintf(msg, "tqsynth: Ignoring %c in '%.*s'", ch, n, phone);
-                printline(msg);
+                LOGD << fmt("Ignoring %c in '%.*s'", ch, n, phone);
                 break;
             }
         }
@@ -3672,4 +3673,5 @@ void darray_free(darray_t *a)
     }
 
     a->items = a->alloc = 0;
+}
 }

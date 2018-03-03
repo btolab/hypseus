@@ -1,5 +1,5 @@
 /*
- * interstellar.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2002-2005 Mark Broadhead
  *
@@ -98,25 +98,25 @@
 
 interstellar::interstellar()
 {
-    struct cpudef cpu;
-    struct sounddef soundchip;
+    struct cpu::def cpu;
+    struct sound::chip soundchip;
 
     m_shortgamename = "interstellar";
     m_disc_fps      = 29.97;
     m_game_type     = GAME_INTERSTELLAR;
 
-    memset(&cpu, 0, sizeof(struct cpudef));
-    cpu.type              = CPU_Z80;
+    memset(&cpu, 0, sizeof(struct cpu::def));
+    cpu.type              = cpu::type::Z80;
     cpu.hz                = INTERSTELLAR_CPU_SPEED; // unverified
     cpu.irq_period[0]     = (1000.0 / 59.94); // this appears to be from vblank
     cpu.nmi_period        = 0;                // these come from coin inserts
     cpu.mem               = m_cpumem;
     cpu.initial_pc        = 0;
     cpu.must_copy_context = true;
-    add_cpu(&cpu); // add Z80 cpu
+    cpu::add(&cpu); // add Z80 cpu
 
-    memset(&cpu, 0, sizeof(struct cpudef));
-    cpu.type          = CPU_Z80;
+    memset(&cpu, 0, sizeof(struct cpu::def));
+    cpu.type          = cpu::type::Z80;
     cpu.hz            = INTERSTELLAR_CPU_SPEED; // unverified
     cpu.irq_period[0] = 0;
     cpu.nmi_period    = 0; // these come from the main cpu writing to the sound
@@ -124,26 +124,26 @@ interstellar::interstellar()
     cpu.mem               = m_cpumem2;
     cpu.initial_pc        = 0;
     cpu.must_copy_context = true;
-    add_cpu(&cpu); // add Z80 cpu
+    cpu::add(&cpu); // add Z80 cpu
 
-    memset(&cpu, 0, sizeof(struct cpudef));
-    cpu.type              = CPU_Z80;
+    memset(&cpu, 0, sizeof(struct cpu::def));
+    cpu.type              = cpu::type::Z80;
     cpu.hz                = INTERSTELLAR_CPU_SPEED; // unverified
     cpu.irq_period[0]     = (1000.0 / 59.94); // from ld-v1000 status strobe
     cpu.nmi_period        = 0.0;              // caused by writes from main cpu
     cpu.mem               = m_cpumem3;
     cpu.initial_pc        = 0;
     cpu.must_copy_context = true;
-    add_cpu(&cpu); // add Z80 cpu
+    cpu::add(&cpu); // add Z80 cpu
 
-    cpu_change_interleave(5);
+    cpu::change_interleave(5);
 
-    memset(&soundchip, 0, sizeof(struct sounddef));
-    soundchip.type = SOUNDCHIP_SN76496; // Interstellar uses 2 SN76496 sound
+    memset(&soundchip, 0, sizeof(struct sound::chip));
+    soundchip.type = sound::CHIP_SN76496; // Interstellar uses 2 SN76496 sound
                                         // chips
     soundchip.hz    = INTERSTELLAR_CPU_SPEED;    // unverified
-    m_soundchip1_id = add_soundchip(&soundchip); // add both chips
-    m_soundchip2_id = add_soundchip(&soundchip);
+    m_soundchip1_id = sound::add_chip(&soundchip); // add both chips
+    m_soundchip2_id = sound::add_chip(&soundchip);
 
     banks[0] = 0x00; // DON'T CHANGE, MUST BE 0x00!
     banks[1] = 0x00; // DON'T CHANGE, MUST BE 0x00!
@@ -193,9 +193,9 @@ interstellar::interstellar()
 // does anything special needed to send an IRQ
 void interstellar::do_irq(unsigned int which_irq)
 {
-    if (cpu_getactivecpu() == 0) {
+    if (cpu::get_active() == 0) {
         // only do a display_update on the vblank irq
-        video_blit();
+        blit();
     }
     Z80_ASSERT_IRQ;
 }
@@ -209,7 +209,7 @@ Uint8 interstellar::cpu_mem_read(Uint16 addr)
     Uint8 result = 0x00;
     char s[81]   = {0};
 
-    switch (cpu_getactivecpu()) {
+    switch (cpu::get_active()) {
     case 0:
         if (addr <= 0x9fff) // rom
         {
@@ -271,7 +271,7 @@ void interstellar::cpu_mem_write(Uint16 addr, Uint8 value)
 {
     char s[81] = {0};
 
-    switch (cpu_getactivecpu()) {
+    switch (cpu::get_active()) {
     case 0:
         if (addr <= 0x9fff) // rom
         {
@@ -346,7 +346,7 @@ Uint8 interstellar::port_read(Uint16 port)
 
     port &= 0xFF; // strip off high byte
 
-    switch (cpu_getactivecpu()) {
+    switch (cpu::get_active()) {
     case 0:
         switch (port) {
         case 0x00: // inputs
@@ -395,7 +395,7 @@ Uint8 interstellar::port_read(Uint16 port)
     case 2:
         switch (port) {
         case 0x00:
-            result = read_ldv1000();
+            result = ldv1000::read();
             if (result != oldldp) {
 #ifdef DEBUG
                 sprintf(s, "LDP Z80 Read %x from LD-V1000 (PC is %x)", result, Z80_GET_PC);
@@ -438,19 +438,19 @@ void interstellar::port_write(Uint16 port, Uint8 value)
 
     port &= 0xFF;
     static Uint8 old1, old2, oldldp;
-    switch (cpu_getactivecpu()) {
+    switch (cpu::get_active()) {
     case 0:
         switch (port) {
         case 0x00: // output to sound latch
             sound_latch = value;
             if (m_cpu1_nmi_enable) {
-                cpu_generate_nmi(1);       // cause an NMI on the sound z80
+                cpu::generate_nmi(1);       // cause an NMI on the sound z80
                 m_cpu1_nmi_enable = false; // disable NMI
             }
             break;
         case 0x02: // unknown
             if (m_cpu2_nmi_enable) {
-                // cpu_generate_nmi(2); // cause an NMI on the sound z80
+                // cpu::generate_nmi(2); // cause an NMI on the sound z80
                 // m_cpu2_nmi_enable = false; // disable NMI
             }
             break;
@@ -494,22 +494,22 @@ void interstellar::port_write(Uint16 port, Uint8 value)
                 //				temp_color.b = (Uint8) (255 *
                 //pow((static_cast<double>(temp_color.b)) / 255, 1/ESH_GAMMA));
 
-                palette_set_color(0, temp_color);
+                palette::set_color(0, temp_color);
                 m_background_color = temp_color;
             }
-            palette_finalize();
+            palette::finalize();
             break;
         case 0x05:
             cpu_latch2 = value;
             if (old2 != value) {
-// cpu_generate_nmi(2);
+// cpu::generate_nmi(2);
 #ifdef DEBUG
                 sprintf(s, "Main Z80 Write %x to LDP Z80 (PC is %x)", value, Z80_GET_PC);
                 printline(s);
 #endif
             }
             if (m_cpu2_nmi_enable) {
-                cpu_generate_nmi(2);
+                cpu::generate_nmi(2);
                 m_cpu2_nmi_enable = false;
             }
             old2 = value;
@@ -529,14 +529,14 @@ void interstellar::port_write(Uint16 port, Uint8 value)
                     ((value & 0x4) << 3) | ((value & 0x8) << 1) |
                     ((value & 0x10) >> 1) | ((value & 0x20) >> 3) |
                     ((value & 0x40) >> 5) | ((value & 0x80) >> 7);
-            audio_writedata(m_soundchip1_id, value);
+            sound::writedata(m_soundchip1_id, value);
             break;
         case 0x02: // write data to sn79489 #2 (rear?)
             value = ((value & 0x1) << 7) | ((value & 0x2) << 5) |
                     ((value & 0x4) << 3) | ((value & 0x8) << 1) |
                     ((value & 0x10) >> 1) | ((value & 0x20) >> 3) |
                     ((value & 0x40) >> 5) | ((value & 0x80) >> 7);
-            audio_writedata(m_soundchip2_id, value);
+            sound::writedata(m_soundchip2_id, value);
             break;
         default:
             sprintf(s, "INTERSTELLAR: CPU 1: Unsupported Port Output-> %x:%x "
@@ -549,7 +549,7 @@ void interstellar::port_write(Uint16 port, Uint8 value)
     case 2:
         switch (port) {
         case 0x00:
-            write_ldv1000(value);
+            ldv1000::write(value);
             if (oldldp != value) {
 #ifdef DEBUG
                 sprintf(s, "LDP Z80 Write %x to LD-V1000 (PC is %x)", value, Z80_GET_PC);
@@ -571,9 +571,9 @@ void interstellar::port_write(Uint16 port, Uint8 value)
         // Port 3 - turns on and off the LD background
         case 0x03:
             if (!value)
-                palette_set_transparency(0, true);
+                palette::set_transparency(0, true);
             else
-                palette_set_transparency(0, false);
+                palette::set_transparency(0, false);
             break;
         default:
             sprintf(s, "INTERSTELLAR: CPU 2: Unsupported Port Output-> %x:%x "
@@ -621,12 +621,12 @@ void interstellar::palette_calculate()
         temp_color.b = static_cast<Uint8>((0x8f * bit0) + (0x43 * bit1) +
                                           (0x1f * bit2) + (0x0e * bit3));
 
-        palette_set_color(i, temp_color);
+        palette::set_color(i, temp_color);
     }
 }
 
 // updates interstellar's video
-void interstellar::video_repaint()
+void interstellar::repaint()
 {
     // clear the video before drawing
     SDL_FillRect(m_video_overlay[m_active_video_overlay], NULL, 0);
@@ -697,7 +697,7 @@ void interstellar::input_enable(Uint8 move)
     case SWITCH_COIN1:
         banks[2] &= ~0x20;
         if (m_cpu0_nmi_enable) {
-            cpu_generate_nmi(0); // cause an NMI on the master z80 when coin is
+            cpu::generate_nmi(0); // cause an NMI on the master z80 when coin is
                                  // inserted
             m_cpu0_nmi_enable = false;
         }
@@ -705,7 +705,7 @@ void interstellar::input_enable(Uint8 move)
     case SWITCH_COIN2:
         banks[2] &= ~0x10;
         if (m_cpu0_nmi_enable) {
-            cpu_generate_nmi(0); // cause an NMI on the master z80 when coin is
+            cpu::generate_nmi(0); // cause an NMI on the master z80 when coin is
                                  // inserted
             m_cpu0_nmi_enable = false;
         }

@@ -1,5 +1,5 @@
 /*
- * vldp_internal.h
+ * ____ VLDP COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -26,6 +26,8 @@
 #define VLDP_INTERNAL_H
 
 #include "vldp.h" // for the VLDP_BOOL definition and SDL.h
+
+#include <mpeg2.h>
 
 // this is which version of the .dat file format we are using
 #define DAT_VERSION 2
@@ -93,7 +95,7 @@ extern unsigned int s_uSkipAllCount; // how many frames we've skipped when
 extern int s_step_forward;           // if this is set, we step forward 1 frame
 extern Uint32 s_timer; // FPS timer used by the blitting code to run at the
                        // right speed
-extern Uint32 s_extra_delay_ms; // any extra delay that null_draw_frame() will
+extern Uint32 s_extra_delay_ms; // any extra delay that draw_frame() will
                                 // use before drawing a frame (intended for
                                 // laserdisc seek delay simulation)
 extern Uint32 s_uFramesShownSinceTimer; // how many frames should've been

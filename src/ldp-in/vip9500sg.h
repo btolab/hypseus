@@ -1,5 +1,5 @@
 /*
- * vip9500sg.h
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Mark Broadhead
  *
@@ -29,11 +29,14 @@
 #define VIP9500SG_SKIP_FORWARD 0x02
 #define VIP9500SG_SKIP_BACKWARD 0x04
 
-unsigned char read_vip9500sg();
-void write_vip9500sg(unsigned char value);
-void vip9500sg_enter(void);
-bool vip9500sg_result_ready(void);
-int vip9500sg_stack_push(unsigned char value);
-void vip9500sg_add_digit(char);
+namespace vip9500sg
+{
+unsigned char read();
+void write(unsigned char value);
+void enter(void);
+bool result_ready(void);
+int stack_push(unsigned char value);
+void add_digit(char);
+}
 
 #endif

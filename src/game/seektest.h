@@ -1,5 +1,5 @@
 /*
- * seektest.h
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -36,7 +36,7 @@ class seektest : public game
     void set_preset(int);
     bool handle_cmdline_arg(const char *arg);
     void palette_calculate();
-    void video_repaint();
+    void repaint();
 
   private:
     Uint16 m_early1, m_early2; // two early frames we can alternate between

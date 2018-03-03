@@ -1,5 +1,5 @@
 /*
- * ldp-vldp-audio.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -25,21 +25,17 @@
 
 // handles the audio portion of VLDP (using Ogg Vorbis)
 
-#ifdef _MSC_VER
-#pragma warning(disable : 4100) // disable the warning about unreferenced formal
-                                // parameters (MSVC++)
-#endif
-
 #ifdef UNIX
 //#define TRY_MMAP 1	// NOTE : this seems to fail on read-only filesystems
 //(such as NTFS mounted from linux)
 #endif
 
-#include "../timer/timer.h"
+#include "ldp-vldp.h"
 #include "../io/conout.h"
 #include "../io/mpo_fileio.h"
 #include "../sound/sound.h"
-#include "ldp-vldp.h"
+#include "../timer/timer.h"
+#include <plog/Log.h>
 
 #ifdef DEBUG
 #include <assert.h> // this may include an extra .DLL in windows that I don't want to rely on
@@ -47,8 +43,8 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #include <vorbis/codec.h> // OGG VORBIS specific headers
 #include <vorbis/vorbisfile.h>
@@ -105,8 +101,8 @@ void mmreset()
 size_t mmread(void *ptr, size_t size, size_t nmemb, void *datasource)
 {
     size_t bytes_to_read = size * nmemb; // how many bytes to be read
-    Uint8 *src           = ((Uint8 *)datasource) + g_audio_filepos; // where to get the
-                                                                    // data from
+    // where to get the data from
+    Uint8 *src = ((Uint8 *)datasource) + g_audio_filepos;
 
     //	printf("mmread being called.. size is %d, nmemb is %d, bytes_to_read is
     //%d\n", size, nmemb, bytes_to_read);
@@ -148,7 +144,7 @@ int mmseek(void *datasource, int64_t offset, int whence)
             if (offset >= 0) {
                 g_audio_filepos = (Uint32)offset;
             } else {
-                printline("mmseek, SEEK_SET used with a negative offset!");
+                LOGW << "SEEK_SET used with a negative offset!";
             }
             result = 0;
         }
@@ -176,16 +172,15 @@ int mmclose(void *datasource)
 {
     // safety check
     if (datasource != g_big_buf) {
-        printline("ldp-vldp-audio.cpp: datasource != g_bigbuf, this should "
-                  "never happen!");
+        LOGE << "datasource != g_bigbuf, this should never happen!";
     }
 
 #ifdef TRY_MMAP
-    printline("Unmapping audio stream from memory ...");
+    LOGD << "Unmapping audio stream from memory ...";
     munmap(g_big_buf, g_audio_filesize);
     datasource = NULL;
 #else
-    printline("Freeing memory used to store audio stream...");
+    LOGD << "Freeing memory used to store audio stream...";
     // free(datasource);
     delete[] g_big_buf;
     g_big_buf = NULL;
@@ -200,7 +195,7 @@ int mmclose(void *datasource)
 long mmtell(void *datasource)
 {
     //	printf("mmtell being called, filepos is %x\n", (Uint32)
-    //g_audio_filepos);
+    // g_audio_filepos);
 
     if (datasource) {
     }
@@ -391,7 +386,7 @@ bool ldp_vldp::open_audio_stream(const string &strFilename)
         g_big_buf = (Uint8 *)mmap(NULL, g_audio_filesize, PROT_READ, MAP_PRIVATE,
                                   fileno(g_pIOAudioHandle->handle), 0);
         if (!g_big_buf) {
-            printline("ERROR : mmap failed");
+            LOGE << "mmap failed";
         }
 #else
         g_big_buf = new unsigned char[g_audio_filesize];
@@ -399,7 +394,7 @@ bool ldp_vldp::open_audio_stream(const string &strFilename)
             mpo_read(g_big_buf, g_audio_filesize, NULL,
                      g_pIOAudioHandle); // read entire stream into RAM
         } else {
-            printline("ERROR : out of memory");
+            LOGE << "out of memory";
         }
 #endif
         if (g_big_buf) {
@@ -415,24 +410,21 @@ bool ldp_vldp::open_audio_stream(const string &strFilename)
                     g_audio_ready = true;
                     result        = true;
                 } else {
-                    char s[160];
-                    printline("OGG ERROR : Your .ogg file needs to have 2 "
-                              "channels and 44100 Hz");
-                    sprintf(s, "OGG ERROR : Your .ogg file has %u channel(s) "
-                               "and is %ld Hz",
-                            info->channels, info->rate);
-                    printline(s);
-                    printline("OGG ERROR : Your .ogg file will be ignored (you "
-                              "won't hear any audio)");
+                    LOGE << ".ogg file must have 2 channels and 44100 Hz";
+                    LOGE << fmt(".ogg file has %u channel(s) and is %ld Hz",
+                                info->channels, info->rate);
+                    LOGE << ".ogg file ignored (you won't hear any audio)";
                 }
             } else {
-                char s[160];
-                sprintf(s, "ov_open_callbacks failed!  Error code is %d\n", open_result);
-                printline(s);
-                sprintf(s, "OV_EREAD=%d OV_ENOTVORBIS=%d OV_EVERSION=%d "
-                           "OV_EBADHEADER=%d OV_EFAULT=%d\n",
-                        OV_EREAD, OV_ENOTVORBIS, OV_EVERSION, OV_EBADHEADER, OV_EFAULT);
-                printline(s);
+                LOGE << fmt("ov_open_callbacks failed! Error code is %d",
+                            open_result);
+                LOGE << fmt("OV_EREAD=%d OV_ENOTVORBIS=%d OV_EVERSION=%d "
+                            "OV_EBADHEADER=%d OV_EFAULT=%d\n",
+                            OV_EREAD,
+                            OV_ENOTVORBIS,
+                            OV_EVERSION,
+                            OV_EBADHEADER,
+                            OV_EFAULT);
             }
         }
         // else we've already printed error messages, so we don't need to do
@@ -458,14 +450,8 @@ bool ldp_vldp::open_audio_stream(const string &strFilename)
     else {
 // don't show this message to end-users, a surprising number of them report this
 // as a bug and it's really getting annoying :)
-#ifdef DEBUG
-        string s;
-        s = "No audio file (" + strFilename +
+        LOGD << "No audio file (" << strFilename <<
             ") was found to go with the opened video file";
-        printline(s.c_str());
-        printline("NOTE : This is not necessarily a problem, some video "
-                  "doesn't have audio!");
-#endif
     }
 
     OGG_UNLOCK;
@@ -487,7 +473,7 @@ bool ldp_vldp::seek_audio(Uint64 u64Samples)
                                  // after a seek
         result = true;
     } else {
-        printline("DOH!  OGG stream is not seekable!");
+        LOGE << "DOH! OGG stream is not seekable!";
     }
 
     OGG_UNLOCK;
@@ -527,9 +513,7 @@ void ldp_vldp_audio_callback(Uint8 *stream, int len, int unused)
     unsigned int uFloodTimer = (GET_TICKS() - g_uCallbackDbgTimer) / 1000;
     if (uFloodTimer != g_uCallbackFloodTimer) {
         g_uCallbackFloodTimer = uFloodTimer;
-        string s = "audio callback frequency is: " +
-                   numstr::ToStr((g_u64CallbackByteCount / uFloodTimer) >> 2);
-        printline(s.c_str());
+        LOGD << fmt("audio callback frequency is: %d", (g_u64CallbackByteCount / uFloodTimer) >> 2);
     }
 #endif
 
@@ -597,7 +581,7 @@ void ldp_vldp_audio_callback(Uint8 *stream, int len, int unused)
 
                 // if we got an error
                 else if (samples_read < 0) {
-                    printline("Problem reading samples!");
+                    LOGE << "Problem reading samples!";
                     g_audio_playing = false;
                     break;
                 }
@@ -605,7 +589,7 @@ void ldp_vldp_audio_callback(Uint8 *stream, int len, int unused)
                 // else, samples_read == 0 in which case we've come to the end
                 // of the stream
                 else {
-                    printline("End of audio stream detected!");
+                    LOGE << "End of audio stream detected!";
                     g_audio_playing = false;
                     break;
                 }
@@ -623,40 +607,23 @@ void ldp_vldp_audio_callback(Uint8 *stream, int len, int unused)
             unsigned int cur_time = g_ldp->get_elapsed_ms_since_play();
             // if our timer is set to the current time or some previous time
             if (g_playing_timer < cur_time) {
-                static const Uint64 uBYTES_PER_S =
-                    AUDIO_FREQ * AUDIO_BYTES_PER_SAMPLE; // needs to be uint64
-                                                         // to prevent overflow
-                                                         // from subsequent math
+                // needs to be uint64 to prevent overflow from subsequent math
+                static const Uint64 uBYTES_PER_S = sound::FREQ * sound::BYTES_PER_SAMPLE;
+                // how many samples should have played 176.4 = 44.1 samples per
+                // millisecond * 2 for stereo * 2 for 16-bit
                 correct_samples =
                     (unsigned int)((uBYTES_PER_S * (cur_time - g_playing_timer)) / 1000);
-                // how many samples should have played
-                // 176.4 = 44.1 samples per millisecond * 2 for stereo * 2 for
-                // 16-bit
             }
             // our timer is set to some time in the future (used with skipping)
-            // so we actually
-            // should not have played any samples at this point
+            // so we actually should not have played any samples at this point
             else {
-                //				fprintf(stderr, "LDP-VLDP-AUDIO : Timer is in the
-                //future\n");
+                // fprintf(stderr, "LDP-VLDP-AUDIO : Timer is in the future\n");
                 correct_samples = 0;
             }
 
             // if we're ahead instead of behind, don't loop
             if (correct_samples <= g_samples_played) {
                 audio_caught_up = true;
-
-                /*
-                // warn user if we're too far ahead (this should never happen)
-                if ((g_samples_played - correct_samples) > len)
-                {
-                    string s = "ldp-vldp-audio callback: audio is too far ahead!
-                played: " +
-                        numstr::ToStr(g_samples_played) + ", expected: " +
-                numstr::ToStr(correct_samples);
-                    printline(s.c_str());
-                }
-                */
             }
 
             // if we're not too far behind, don't loop
@@ -666,13 +633,11 @@ void ldp_vldp_audio_callback(Uint8 *stream, int len, int unused)
 
             // if we're too far behind, notify the user for testing purposes
             else {
-                /*
-                char s[160];
-                sprintf(s, "AUDIO : played %u, expected %u, timer=%u,
-                curtime=%u", g_samples_played, correct_samples, g_playing_timer,
-                g_ldp->get_elapsed_ms_since_play());
-                printline(s);
-                */
+                LOGD << fmt("played %u, expected %u, timer=%u, curtime=%u",
+                            g_samples_played,
+                            correct_samples,
+                            g_playing_timer,
+                            g_ldp->get_elapsed_ms_since_play());
                 audio_caught_up = false;
                 SDL_Delay(0); // don't starve other processes while trying to
                               // catch up

@@ -1,5 +1,5 @@
 /*
- * lair2.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2003 Paul Blagay
  *
@@ -44,26 +44,22 @@ NORMAL_MODE = 0x20
 
 #include "config.h"
 
-#ifdef _MSC_VER
-#pragma warning(disable : 4100) // disable warning about unreferenced parameter
-#endif
-
 // Win32 doesn't use strcasecmp, it uses stricmp (lame)
 #ifdef WIN32
 #define strcasecmp stricmp
 #endif
 
 #include <stdio.h>
+#include <plog/Log.h>
 #include "lair2.h"
 #include "../ldp-out/ldp.h"
 #include "../ldp-in/ldp1000.h"
 #include "../ldp-in/vp932.h"
 #include "../io/conout.h"
 #include "../io/error.h"
-#include "../io/serial.h" // for controlling a real LDP-1450
 #include "../sound/sound.h"
 #include "../cpu/cpu.h"
-#include "../daphne.h"
+#include "../hypseus.h"
 #include "../io/sram.h"
 #include "../timer/timer.h" // for debugging
 #include "../cpu/x86/i86intf.h"
@@ -211,12 +207,11 @@ int g_dl2_euro = 0;
 lair2::lair2()
     : m_uSerialBufSize(0),         // the serial buffer starts off being empty
       m_serial_int_enabled(false), // serial interrupts start off disabled
-      m_real_1450(false),          // no real LDP-1450 is attached by default
       // serial hack isn't proper emulation, so it is disabled by default
       m_bSerialHack(false)
 {
     m_shortgamename = "lair2";
-    memset(m_cpumem, 0, CPU_MEM_SIZE);
+    memset(m_cpumem, 0, cpu::MEM_SIZE);
     memset(EEPROM_9536, 0, 0x80);
     m_uCoinCount[0] = m_uCoinCount[1] = 0;
     banks[0] = 0xff; // bank 0 is active low
@@ -230,9 +225,9 @@ lair2::lair2()
     m_palette_color_count                   = 256;
     m_video_overlay[m_active_video_overlay] = NULL;
 
-    struct cpudef cpu;
-    memset(&cpu, 0, sizeof(struct cpudef));
-    cpu.type          = CPU_I88;
+    struct cpu::def cpu;
+    memset(&cpu, 0, sizeof(struct cpu::def));
+    cpu.type          = cpu::type::I88;
     cpu.hz            = LAIR2_CPU_HZ;
     cpu.irq_period[0] = LAIR2_IRQ_PERIOD;
     cpu.irq_period[1] = ((1000.0) * (8 + 1)) / 9600.0; // serial port IRQ (8
@@ -250,13 +245,13 @@ lair2::lair2()
     m_nvram_filename    = "lair2";
     m_nvram_size        = 0x80;
 
-    add_cpu(&cpu); // add this cpu to the list (it will be our only one)
+    cpu::add(&cpu); // add this cpu to the list (it will be our only one)
 
     // add our awesome sound chip!
-    struct sounddef def;
-    def.type       = SOUNDCHIP_PC_BEEPER;
+    struct sound::chip def;
+    def.type       = sound::CHIP_PC_BEEPER;
     def.hz         = 0; // not used
-    m_soundchip_id = add_soundchip(&def);
+    m_soundchip_id = sound::add_chip(&def);
     m_port61_val   = 0;
 
     m_disc_fps  = 29.97;
@@ -294,11 +289,11 @@ lair2::lair2()
                         g_ace91_roms[0].buf = g_ace91e_roms[0].buf = &m_cpumem[0xF0000];
 
     // ldp1450 text stuff
-    memset(&g_LDP1450_TextControl, 0, sizeof(ldp_text_control));
+    memset(&ldp1000::g_LDP1450_TextControl, 0, sizeof(ldp1000::ldp_text_control));
 
     // clear the ldp strings
     for (int i = 0; i < 3; i++) {
-        g_LDP1450_Strings[i].String[0] = 0;
+        ldp1000::g_LDP1450_Strings[i].String[0] = 0;
     }
 
     i86_set_irq_callback(lair2_irq_callback);
@@ -337,7 +332,7 @@ void ace91::set_version(int version)
 
 bool lair2::init()
 {
-    cpu_init();
+    cpu::init();
     g_ldp->pre_play(); // the LDP-1450 automatically begins playback
     return true;
 }
@@ -421,19 +416,12 @@ bool lair2::handle_cmdline_arg(const char *arg)
 {
     bool bResult = true;
 
-    // instead of emulating a LDP-1450, just pass the serial port commands
-    // through to the real serial port
-    // This is for people who actually have a real 1450 and want to play DL2 on
-    // it
-    if (strcasecmp(arg, "-real1450") == 0) {
-        m_real_1450 = true;
-    }
     // Instead of generating serial port IRQ's, manually store serial data into
     // the memory
     // (requires knowing memory locations in the ROM, so this probably will only
     // be
     // supported on v3.19)
-    else if (strcasecmp(arg, "-serialhack") == 0) {
+    if (strcasecmp(arg, "-serialhack") == 0) {
         // make sure we're using the right rom version to be able to handle this
         // ...
         if (g_Dv == g_dl2vars_319) {
@@ -626,9 +614,9 @@ void lair2::do_irq(unsigned int which_irq)
 {
     if (m_bSerialHack) {
 #if SDL_BYTEORDER == SDL_LIL_ENDIAN
-        while (ldp1000_result_ready()) {
+        while (ldp1000::result_ready()) {
             // NOTE : only works on little endian!
-            unsigned char u8Val   = read_ldp1000();
+            unsigned char u8Val   = ldp1000::read();
             unsigned char *ccbuf2 = &m_cpumem[0x1A050];
             Sint16 *p_endbuf2     = (Sint16 *)&m_cpumem[0x1596E];
             Sint16 *p_RxCnt2      = (Sint16 *)&m_cpumem[0x1596A];
@@ -658,22 +646,13 @@ void lair2::do_irq(unsigned int which_irq)
                 serial_val = -1;
 
                 if (g_dl2_euro) {
-                    if (vp932_data_available()) {
-                        serial_val = vp932_read();
+                    if (vp932::data_available()) {
+                        serial_val = vp932::read();
                     }
                 } else {
-                    // if we're connected to a real 1450 ... read the value now
-                    if (m_real_1450) {
-                        // if there is a character waiting in the buffer to be
-                        // read ...
-                        if (serial_rx_char_waiting()) {
-                            serial_val = serial_rx();
-                        }
-                    }
-
-                    // otherwise just read from our emulated 1450
-                    else if (ldp1000_result_ready()) {
-                        serial_val = read_ldp1000();
+                    // read from our emulated 1450
+                    if (ldp1000::result_ready()) {
+                        serial_val = ldp1000::read();
                     }
                     // else no char is available
                 }
@@ -707,7 +686,7 @@ void lair2::do_irq(unsigned int which_irq)
         // else we have no room
     }
 
-    if (m_game_uses_video_overlay && m_video_overlay_needs_update) video_blit();
+    if (m_game_uses_video_overlay && m_video_overlay_needs_update) blit();
 }
 
 void lair2::port_write(Uint16 port, Uint8 value)
@@ -741,7 +720,7 @@ void lair2::port_write(Uint16 port, Uint8 value)
         if (value == 0xb6 && m_prefer_samples) m_sample_trigger = false;
     case 0x61:
         if (!m_prefer_samples)
-            audio_write_ctrl_data(port, value, m_soundchip_id);
+            sound::write_ctrl_data(port, value, m_soundchip_id);
         else {
             if (port == 0x42) {
                 if (m_sample_trigger) {
@@ -752,7 +731,7 @@ void lair2::port_write(Uint16 port, Uint8 value)
                         }
                     }
 
-                    sound_play(g_sound_map[value]);
+                    sound::play(g_sound_map[value]);
                 } else
                     m_sample_trigger = true;
             }
@@ -808,19 +787,10 @@ numstr::ToStr(uElapsed);
         // write to LDP
         // and set our interupt
         if (g_dl2_euro) {
-            vp932_write(value);
+            vp932::write(value);
         } else {
-            // if we're hooked up to a real LDP-1450, send directly to the
-            // serial port
-            if (m_real_1450) {
-                serial_tx(value);
-                while (!serial_rx_char_waiting()) SDL_Delay(1); // TESTING...
-            }
-
             // otherwise send to our emulated LDP
-            else {
-                write_ldp1000(value);
-            }
+            ldp1000::write(value);
         }
         break;
     }
@@ -878,8 +848,8 @@ Uint8 lair2::port_read(Uint16 port)
         // this should never happen, so it's safe to put an error to notify us
         // if something weird is going on
         else
-            printline("LAIR2.CPP WARNING : tried to read from serial port when "
-                      "no char was waiting");
+            LOGW << "tried to read from serial port when "
+                            "no char was waiting";
         break;
 
     case 0x2F8 + DL2_IER: // Interrupt enable
@@ -920,7 +890,7 @@ bool lair2::set_bank(unsigned char which_bank, unsigned char value)
 {
     bool result = true;
 
-    printline("ERROR: Dragon's Lair 2 uses onscreen setup");
+    LOGW << "no dip switches, uses onscreen setup";
     result = false;
 
     return result;
@@ -1004,7 +974,7 @@ void lair2::input_disable(Uint8 move)
     }
 }
 
-void lair2::video_repaint()
+void lair2::repaint()
 {
     Uint32 cur_w = g_ldp->get_discvideo_width() >> 1;  // width our overlay
                                                        // should be
@@ -1014,22 +984,22 @@ void lair2::video_repaint()
     // If the width or height of the mpeg video has changed since we last were
     // here (ie, opening a new mpeg) then reallocate the video overlay buffer.
     if ((cur_w != m_video_overlay_width) || (cur_h != m_video_overlay_height)) {
-        printline("LAIR2 : Surface does not match disc video, re-allocating "
-                  "surface!");
+        LOGW << "Surface does not match disc video, re-allocating "
+                        "surface!";
 
         // in order to re-initialize our video we need to stop the yuv callback
         if (g_ldp->lock_overlay(1000)) {
             m_video_overlay_width  = cur_w;
             m_video_overlay_height = cur_h;
-            video_shutdown();
-            if (!video_init()) set_quitflag(); // safety check
+            shutdown_video();
+            if (!init_video()) set_quitflag(); // safety check
             g_ldp->unlock_overlay(1000);       // unblock game video overlay
         }
 
         // if the yuv callback is not responding to our stop request
         else {
-            printline(
-                "LAIR2 : Timed out trying to get a lock on the yuv overlay");
+            LOGW <<
+                "Timed out trying to get a lock on the yuv overlay";
         }
     } // end if video resizing is required
 }
@@ -1076,7 +1046,7 @@ void lair2::EEPROM_9536_write(Uint8 value)
                     sprintf(s, "EEP unhandled OPCode %x with address %x", nv_opcode, nv_address);
                     banks[1] |= 0x01; // set bit 0 high to indicate we aren't
                                       // busy
-                    printline(s);
+                    LOGW << s;
                 }
 
                 banks[1] = (banks[1] & ~0x01) | ((EEPROM_9536[nv_address] >> 15) & 0x01);

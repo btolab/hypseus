@@ -1,5 +1,5 @@
 /*
- * cliff.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -32,6 +32,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <plog/Log.h>
 #include "cliff.h"
 #include "../io/conout.h"
 #include "../sound/sound.h"
@@ -51,10 +52,10 @@
 // cliff constructor
 cliff::cliff()
 {
-    struct cpudef cpu;
+    struct cpu::def cpu;
 
     m_shortgamename = "cliff";
-    memset(&cpu, 0, sizeof(struct cpudef));
+    memset(&cpu, 0, sizeof(struct cpu::def));
     // initialize m_blips
     m_blips       = 0;
     m_blips_count = 0;
@@ -85,14 +86,14 @@ cliff::cliff()
     m_video_overlay_height = TMS9128NL_OVERLAY_H;
     m_palette_color_count  = TMS_COLOR_COUNT;
 
-    cpu.type              = CPU_Z80;
+    cpu.type              = cpu::type::Z80;
     cpu.hz                = CLIFF_CPU_HZ;
     cpu.initial_pc        = 0;
     cpu.must_copy_context = false;
     cpu.irq_period[0]     = CLIFF_IRQ_PERIOD;
     cpu.nmi_period        = CLIFF_NMI_PERIOD;
     cpu.mem = m_cpumem;
-    add_cpu(&cpu); // add z80 cpu
+    cpu::add(&cpu); // add z80 cpu
 
     m_num_sounds              = 3;
     m_sound_name[S_C_CORRECT] = "cliff_correct.wav";
@@ -177,20 +178,20 @@ cliffalt2::cliffalt2()
 // resets cliff hanger
 void cliff::reset()
 {
-    cpu_reset();
-    video_shutdown();
-    video_init();   // restart the video, because otherwise cliff won't reboot
-    pr8210_reset(); // makes sure audio is in the correct state
+    cpu::reset();
+    shutdown_video();
+    init_video();   // restart the video, because otherwise cliff won't reboot
+    pr8210::reset(); // makes sure audio is in the correct state
 }
 
 // resets goal to go
 void gtg::reset()
 {
-    cpu_reset();
+    cpu::reset();
     e1ba_accesscount = 0; // reset the frame/chapter read count
-    video_shutdown();
-    video_init();   // restart the video
-    pr8210_reset(); // makes sure audio is in the correct state
+    shutdown_video();
+    init_video();   // restart the video
+    pr8210::reset(); // makes sure audio is in the correct state
 }
 
 // when z80 outputs to a port, this gets called
@@ -217,13 +218,13 @@ void cliff::port_write(Uint16 Port, Uint8 Value)
             // the lower bits control which sound to play
             switch (m_uLastSoundIdx) {
             case 1:
-                sound_play(S_C_CORRECT);
+                sound::play(S_C_CORRECT);
                 break;
             case 2:
-                sound_play(S_C_WRONG);
+                sound::play(S_C_WRONG);
                 break;
             case 3:
-                sound_play(S_C_STARTUP);
+                sound::play(S_C_STARTUP);
                 break;
             default:
                 // no sound
@@ -248,7 +249,7 @@ void cliff::port_write(Uint16 Port, Uint8 Value)
     // example, 0xAA or 0x00
     case 0x57: // get frame from LDP
     {
-        m_frame_val = pr8210_get_current_frame();
+        m_frame_val = pr8210::get_current_frame();
         g_ldp->framenum_to_frame(m_frame_val, m_frame_str);
         sprintf(s, "Playing Frame: %s", m_frame_str);
         tms9128nl_outcommand(s, 43, 23);
@@ -268,8 +269,7 @@ void cliff::port_write(Uint16 Port, Uint8 Value)
         }
 
         else {
-            sprintf(s, "A bank out of range was requested! %x", Value);
-            printline(s);
+            LOGW << fmt("A bank out of range was requested! %x", Value);
         }
         break;
 
@@ -307,8 +307,7 @@ void cliff::port_write(Uint16 Port, Uint8 Value)
         // printline("LED Off");
         break;
     default:
-        sprintf(s, "CLIFF: Unsupported Port Output-> %x : %x", Port, Value);
-        printline(s);
+        LOGW << fmt("Unsupported Port Output-> %x : %x", Port, Value);
         break;
     }
 }
@@ -316,7 +315,6 @@ void cliff::port_write(Uint16 Port, Uint8 Value)
 Uint8 cliff::port_read(Uint16 Port)
 // Called whenever the emulator wants to read from a port
 {
-    char s[81]           = {0};
     unsigned char result = 0;
     Port &= 0xFF; // strip off high byte
 
@@ -365,8 +363,7 @@ Uint8 cliff::port_read(Uint16 Port)
         result = m_banks[m_banks_index];
         break;
     default:
-        sprintf(s, "CLIFF: Unsupported Port Input-> %x (PC is %x)", Port, Z80_GET_PC);
-        printline(s);
+        LOGW << fmt("Unsupported Port Input-> %x (PC is %x)", Port, Z80_GET_PC);
         break;
     }
     return (result);
@@ -374,7 +371,7 @@ Uint8 cliff::port_read(Uint16 Port)
 
 void cliff::do_nmi()
 {
-    video_blit(); // vsync
+    blit(); // vsync
 
     // if the TMS chip is producing interrupts, then we do an NMI
     if (tms9128nl_int_enabled()) {
@@ -422,7 +419,7 @@ void cliff::cliff_do_blip()
     static Uint64 total_cycles = 0;
 
     Uint8 blip_value        = 0;
-    Uint64 cur_total_cycles = get_total_cycles_executed(0);
+    Uint64 cur_total_cycles = cpu::get_total_cycles_executed(0);
 
     // check to make sure flush_cpu_timers was not called
     if (cur_total_cycles > total_cycles) {
@@ -449,7 +446,7 @@ void cliff::cliff_do_blip()
 
             // if buffer is filled, send command
             if (m_blips_count > 9) {
-                pr8210_command(m_blips);
+                pr8210::command(m_blips);
                 m_blips_count = 0;
             }
         } // if we got a blip at all
@@ -477,13 +474,13 @@ void cliff::cliff_set_service_mode(int enabled)
 
     // turn on service mode
     if (enabled) {
-        printline("Enabling service mode");
+        LOGD << "Enabling service mode";
         m_banks[3] &= DIP12_SERVICE;
     }
 
     // turn off service mode
     else {
-        printline("Disabling service mode");
+        LOGD << "Disabling service mode";
         m_banks[3] |= ~DIP12_SERVICE;
     }
 }
@@ -493,10 +490,10 @@ void cliff::cliff_set_service_mode(int enabled)
 void cliff::cliff_set_test_mode(int enabled)
 {
     if (enabled) {
-        printline("Enabling test mode");
+        LOGD << "Enabling test mode";
         m_banks[3] &= DIP13_SWITCHES;
     } else {
-        printline("Disabling test mode");
+        LOGD << "Disabling test mode";
         m_banks[3] |= ~DIP13_SWITCHES;
     }
 }
@@ -551,9 +548,7 @@ void cliff::input_enable(Uint8 move)
         break;
 
     default:
-        char s[81] = {0};
-        sprintf(s, "Bug in Cliffy's input enable.  Input was %x", move);
-        printline(s);
+        LOGW << fmt("Bug in Cliffy's input enable.  Input was %x", move);
         break;
     }
 }
@@ -599,9 +594,7 @@ void cliff::input_disable(Uint8 move)
         m_banks[5] |= 128;
         break;
     default:
-        char s[81] = {0};
-        sprintf(s, "Error, bug in Cliffy's input disable, input was %x", move);
-        printline(s);
+        LOGW << fmt("bug in Cliffy's input disable, input was %x", move);
         break;
     }
 }
@@ -625,7 +618,7 @@ bool cliff::set_bank(unsigned char which_bank, unsigned char value)
         m_banks[1] = (unsigned char)(value ^ 0xFF); // switches are active low
         break;
     default:
-        printline("ERROR: Bank specified is out of range!");
+        LOGW << "Bank specified is out of range!";
         result = false;
         break;
     }
@@ -635,7 +628,7 @@ bool cliff::set_bank(unsigned char which_bank, unsigned char value)
 
 void cliff::palette_calculate() { tms9128nl_palette_calculate(); }
 
-void cliff::video_repaint() { tms9128nl_video_repaint(); }
+void cliff::repaint() { tms9128nl_video_repaint(); }
 
 // post-rom loading adjustment
 void cliff::patch_roms()
@@ -648,7 +641,7 @@ void cliff::patch_roms()
         m_cpumem[0xD37] = 0;
         m_cpumem[0xD38] = 0;
 
-        printline("Cliff hanger infinite lives cheat enabled!");
+        LOGD << "Cliff hanger infinite lives cheat enabled!";
     }
 
     // MATT : commented out since we can now support more than one ROM set

@@ -1,5 +1,5 @@
 /*
- * input.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -25,11 +25,12 @@
 #include "config.h"
 
 #include <time.h>
+#include <plog/Log.h>
 #include "input.h"
 #include "conout.h"
 #include "homedir.h"
 #include "../video/video.h"
-#include "../daphne.h"
+#include "../hypseus.h"
 #include "../timer/timer.h"
 #include "../game/game.h"
 #include "../game/thayers.h"
@@ -62,7 +63,7 @@ unsigned int idle_timer;          // added by JFA for -idleexit
 const double STICKY_COIN_SECONDS =
     0.125; // how many seconds a coin acceptor is forced to be "depressed" and
            // how many seconds it is forced to be "released"
-Uint32 g_sticky_coin_cycles = 0; // STICKY_COIN_SECONDS * get_cpu_hz(0), cannot
+Uint32 g_sticky_coin_cycles = 0; // STICKY_COIN_SECONDS * cpu::get_hz(0), cannot
                                  // be calculated statically
 queue<struct coin_input> g_coin_queue; // keeps track of coin input to guarantee
                                        // that coins don't get missed if the cpu
@@ -71,7 +72,7 @@ Uint64 g_last_coin_cycle_used = 0; // the cycle value that our last coin press
                                    // used
 
 // the ASCII key words that the parser looks at for the key values
-// NOTE : these are in a specific order, corresponding to the enum in daphne.h
+// NOTE : these are in a specific order, corresponding to the enum in hypseus.h
 const char *g_key_names[] = {"KEY_UP",      "KEY_LEFT",    "KEY_DOWN",
                              "KEY_RIGHT",   "KEY_START1",  "KEY_START2",
                              "KEY_BUTTON1", "KEY_BUTTON2", "KEY_BUTTON3",
@@ -83,7 +84,7 @@ const char *g_key_names[] = {"KEY_UP",      "KEY_LEFT",    "KEY_DOWN",
 
 // default key assignments, in case .ini file is missing
 // Notice each switch can have two keys assigned to it
-// NOTE : These are in a specific order, corresponding to the enum in daphne.h
+// NOTE : These are in a specific order, corresponding to the enum in hypseus.h
 int g_key_defs[SWITCH_COUNT][2] = {
     {SDLK_UP, SDLK_KP_8},     // up
     {SDLK_LEFT, SDLK_KP_4},   // left
@@ -152,7 +153,7 @@ void CFG_Keys()
 
     io = mpo_open(strDapInput.c_str(), MPO_OPEN_READONLY);
     if (io) {
-        printline("Remapping input ...");
+        LOGD << "Remapping input ...";
 
         cur_line = "";
 
@@ -160,8 +161,8 @@ void CFG_Keys()
         while (strcasecmp(cur_line.c_str(), "[KEYBOARD]") != 0) {
             read_line(io, cur_line);
             if (io->eof) {
-                printline(
-                    "CFG_Keys() : never found [KEYBOARD] header, aborting");
+                LOGW <<
+                    "CFG_Keys() : never found [KEYBOARD] header, aborting";
                 break;
             }
         }
@@ -211,33 +212,27 @@ void CFG_Keys()
 
                                     // if the key line was unknown
                                     if (!found_match) {
-                                        cur_line = "CFG_Keys() : Unrecognized "
-                                                   "key name " +
+                                        cur_line = "Unrecognized key name " +
                                                    key_name;
-                                        printline(cur_line.c_str());
+                                        LOGW << cur_line;
                                         corrupt_file = true;
                                     }
 
                                 } else
-                                    printline("CFG_Keys() : Expected 3 "
-                                              "integers, only found 2");
+                                    LOGW << "Expected 3 integers, only found 2";
                             } else
-                                printline("CFG_Keys() : Expected 3 integers, "
-                                          "only found 1");
+                                LOGW << "Expected 3 integers, only found 1";
                         } else
-                            printline(
-                                "CFG_Keys() : Expected 3 integers, found none");
+                            LOGW << "Expected 3 integers, found none";
                     } // end equals sign
                     else
-                        printline("CFG_Keys() : Expected an '=' sign, didn't "
-                                  "find it");
+                        LOGW << "Expected an '=' sign, didn't find it";
                 } // end if we found key_name
                 else
-                    printline("CFG_Keys() : Weird unexpected error happened"); // this really shouldn't ever happen
+                    LOGW << "Weird unexpected error happened"; // this really shouldn't ever happen
 
                 if (corrupt_file) {
-                    printline("CFG_Keys() : input remapping file was not in "
-                              "proper format, so we are aborting");
+                    LOGW << "input remapping file was not in proper format, so we are aborting";
                     break;
                 }
             } // end if we didn't find a blank line
@@ -262,7 +257,7 @@ int SDL_input_init()
         g_coin_queue.pop();
     }
     g_sticky_coin_cycles =
-        (Uint32)(STICKY_COIN_SECONDS * get_cpu_hz(0)); // only needs to be
+        (Uint32)(STICKY_COIN_SECONDS * cpu::get_hz(0)); // only needs to be
                                                        // calculated once
 
     if (SDL_InitSubSystem(SDL_INIT_JOYSTICK) >= 0) {
@@ -275,24 +270,24 @@ int SDL_input_init()
                                                   // automatically choose the
                                                   // first joystick
                 if (G_joystick != NULL) {
-                    printline("Joystick #0 was successfully opened");
+                    LOGD << "Joystick #0 was successfully opened";
                 } else {
-                    printline("Error opening joystick!");
+                    LOGW << "Error opening joystick!";
                 }
             } else {
-                printline("No joysticks detected");
+                LOGI << "No joysticks detected";
             }
         }
         // notify user that their attempt to disable the joystick is successful
         else {
-            printline("Joystick usage disabled");
+            LOGI << "Joystick usage disabled";
         }
 
         CFG_Keys(); // NOTE : for some freak reason, this should not be done
                     // BEFORE the joystick is initialized, I don't know why!
         result = 1;
     } else {
-        printline("Input initialization failed!");
+        LOGW << "Input initialization failed!";
     }
 
     idle_timer = refresh_ms_time(); // added by JFA for -idleexit
@@ -352,7 +347,7 @@ void SDL_check_input()
         // here
 
         // if it's safe to activate the coin
-        if (get_total_cycles_executed(0) > coin.cycles_when_to_enable) {
+        if (cpu::get_total_cycles_executed(0) > coin.cycles_when_to_enable) {
             // if we're supposed to enable this coin
             if (coin.coin_enabled) {
                 g_game->input_enable(coin.coin_val);
@@ -526,7 +521,7 @@ void process_event(SDL_Event *event)
 // if a key is pressed, we go here
 void process_keydown(SDL_Keycode key)
 {
-    // go through each key def (defined in enum in daphne.h) and check to see if
+    // go through each key def (defined in enum in hypseus.h) and check to see if
     // the key entered matches
     // If we have a match, the switch to be used is the value of the index
     // "move"
@@ -540,7 +535,7 @@ void process_keydown(SDL_Keycode key)
     if ((key == SDLK_LALT) || (key == SDLK_RALT)) {
         g_alt_pressed = true;
     } else if ((key == SDLK_RETURN) && (g_alt_pressed)) {
-        vid_toggle_fullscreen();
+        video::vid_toggle_fullscreen();
     }
     // end ALT-ENTER check
 }
@@ -548,7 +543,7 @@ void process_keydown(SDL_Keycode key)
 // if a key is released, we go here
 void process_keyup(SDL_Keycode key)
 {
-    // go through each key def (defined in enum in daphne.h) and check to see if
+    // go through each key def (defined in enum in hypseus.h) and check to see if
     // the key entered matches
     // If we have a match, the switch to be used is the value of the index
     // "move"
@@ -667,7 +662,7 @@ void input_enable(Uint8 move)
         g_game->reset();
         break;
     case SWITCH_SCREENSHOT:
-        printline("Screenshot requested!");
+        LOGD << "Screenshot requested!";
         g_ldp->request_screenshot();
         break;
     case SWITCH_PAUSE:
@@ -682,7 +677,7 @@ void input_enable(Uint8 move)
         // the cpu is busy (such as during a seek)
         // therefore if the input is coin1 or coin2 AND we are using a real cpu
         // (and not a program such as seektest)
-        if (get_cpu_hz(0) > 0) {
+        if (cpu::get_hz(0) > 0) {
             add_coin_to_queue(true, move);
         }
         break;
@@ -704,7 +699,7 @@ void input_disable(Uint8 move)
         // the cpu is busy (such as during a seek)
         // therefore if the input is coin1 or coin2 AND we are using a real cpu
         // (and not a program such as seektest)
-        if (((move == SWITCH_COIN1) || (move == SWITCH_COIN2)) && (get_cpu_hz(0) > 0)) {
+        if (((move == SWITCH_COIN1) || (move == SWITCH_COIN2)) && (cpu::get_hz(0) > 0)) {
             add_coin_to_queue(false, move);
         } else {
             g_game->input_disable(move);
@@ -715,7 +710,7 @@ void input_disable(Uint8 move)
 
 inline void add_coin_to_queue(bool enabled, Uint8 val)
 {
-    Uint64 total_cycles = get_total_cycles_executed(0);
+    Uint64 total_cycles = cpu::get_total_cycles_executed(0);
     struct coin_input coin;
     coin.coin_enabled = enabled;
     coin.coin_val     = val;
@@ -743,7 +738,7 @@ void reset_idle(void)
     // So the first key press should always unmute the sound.
     if (!bSoundOn) {
         bSoundOn = true;
-        set_sound_mute(false);
+        sound::set_mute(false);
     }
 
     idle_timer = refresh_ms_time();

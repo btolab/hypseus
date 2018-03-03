@@ -1,5 +1,5 @@
 /*
-* singe.cpp
+* ____ DAPHNE COPYRIGHT NOTICE ____
 *
 * Copyright (C) 2006 Scott C. Duensing
 *
@@ -137,11 +137,11 @@ bool singe::init()
         // declaration examples.
         //
         // The function on the right side is the wrapper function.
-        // It's the function that does something on the Daphne side.
+        // It's the function that does something on the Hypseus side.
         //
         // Have a look at the class declaration in singe.h for details.
         // The two lines below basically link these functions together
-        // So when the DLL needs something from Daphne
+        // So when the DLL needs something from Hypseus
         // then the DLL knows which function to call.
         g_SingeIn.cfm_set_keyboard_mode = gfm_set_keyboard_mode;
         g_SingeIn.cfm_get_keyboard_mode = gfm_get_keyboard_mode;
@@ -149,7 +149,7 @@ bool singe::init()
         /*
         Why a wrapper?
 
-        Special case. We can't hook up the function on the Daphne side (CFMs)
+        Special case. We can't hook up the function on the Hypseus side (CFMs)
         directly to the functions inside the singe class
         because their pointer types don't match.
         To do function callbacks you need to provide a static function.
@@ -202,7 +202,7 @@ void singe::start()
             if (intReturn == 1) {
                 m_video_overlay_needs_update = true;
             }
-            video_blit();
+            blit();
             SDL_check_input();
             samples_do_queued_callbacks(); // hack to ensure sound callbacks are
                                            // called at a time when lua can
@@ -280,22 +280,22 @@ void singe::palette_calculate()
         temp_color.r = i & 0xE0;        // Top 3 bits for red
         temp_color.g = (i << 3) & 0xC0; // Middle 2 bits for green
         temp_color.b = (i << 5) & 0xE0; // Bottom 3 bits for blue
-        palette_set_color(i, temp_color);
+        palette::set_color(i, temp_color);
     }
 
     // special case: 00 is reserved for transparency, so 01 becomes fully black
     temp_color.r = temp_color.g = temp_color.b = 0;
-    palette_set_color(1, temp_color);
+    palette::set_color(1, temp_color);
 
     // safety : 00 should never be visible so we'll make it a bright color to
     // help us
     //  catch errors
     temp_color.r = temp_color.g = temp_color.b = 0xFF;
-    palette_set_color(0, temp_color);
+    palette::set_color(0, temp_color);
 }
 
 // redraws video
-void singe::video_repaint()
+void singe::repaint()
 {
     Uint32 cur_w = g_ldp->get_discvideo_width() >> 1; // width overlay should be
     Uint32 cur_h = g_ldp->get_discvideo_height() >> 1; // height overlay should
@@ -312,7 +312,7 @@ void singe::video_repaint()
             g_pSingeOut->sep_set_surface(m_video_overlay_width, m_video_overlay_height);
 
             video_shutdown();
-            if (!video_init()) {
+            if (!init_video()) {
                 printline(
                     "Fatal Error, trying to re-create the surface failed!");
                 set_quitflag();
@@ -358,7 +358,7 @@ double singe::get_singe_version()
 // This handles when a key is pressed down
 void singe::process_keydown(SDL_Keycode key, int keydefs[][2])
 {
-    /* Normal Daphne use has the program look for a set of default keys.
+    /* Normal Hypseus use has the program look for a set of default keys.
      * These are read from daphne.ini (or if daphne.ini is absent, then set
      * a default configuration). The rest of the keyboard is ignored.
      * This is the default mode that works for most gamees.

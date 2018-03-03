@@ -1,5 +1,5 @@
 /*
- * releasetest.h
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2005 Matt Ownby
  *
@@ -41,7 +41,7 @@ class releasetest : public game
     releasetest();
     virtual ~releasetest();
     void start();
-    void video_repaint();
+    void repaint();
 
   private:
     // after a test, call this function to indicate whether test passed or

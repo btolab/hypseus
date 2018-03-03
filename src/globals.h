@@ -1,5 +1,5 @@
 /*
- * globals.h
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -31,9 +31,6 @@ ldp *g_ldp   = NULL; // pointer to the ldp class that emulator will use
 
 Uint8 quitflag = 0; // 1 = we are ready to quit the program
 
-Uint8 serial_port = 0; // which serial port to use to control LDP
-// which baud rate they want the serial port to function at
-int baud_rate = 9600;
 // Value to add to every frame we search for (0 unless we have a PAL Dragon's
 // Lair disc and the NTSC roms)
 // PAL disc starts at frame 1, NTSC disc starts at frame 153.
@@ -51,5 +48,7 @@ unsigned int rsb_port = 0; // 0 = LPT1, 1 = LPT2 or address of real scoreboard
 
 unsigned int idleexit; // added by JFA for -idleexit
 unsigned char startsilent = 0;
+
+bool log_was_disabled = false; // added by MAC for -nolog
 
 #endif

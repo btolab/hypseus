@@ -1,5 +1,5 @@
 /*
- * thayers.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Mark Broadhead
  *
@@ -44,16 +44,16 @@
 
 thayers::thayers() : m_pScoreboard(NULL)
 {
-    struct cpudef cpu;
+    struct cpu::def cpu;
 
     m_shortgamename = "tq";
-    memset(&cpu, 0, sizeof(struct cpudef));
+    memset(&cpu, 0, sizeof(struct cpu::def));
     memset(banks, 0xFF, 2); // fill banks with 0xFF's
     banks[0]    = 0x0;      // put it on free play
     m_disc_fps  = 29.97;
     m_game_type = GAME_THAYERS;
 
-    cpu.type          = CPU_Z80;
+    cpu.type          = cpu::type::Z80;
     cpu.hz            = THAYERS_CPU_HZ;
     cpu.irq_period[0] = (1000.0 / 60.0); // TQ has no clock-driven IRQ, but
                                          // we'll use this to time vsync instead
@@ -61,18 +61,18 @@ thayers::thayers() : m_pScoreboard(NULL)
     cpu.initial_pc        = 0;
     cpu.must_copy_context = false;
     cpu.mem = m_cpumem;
-    add_cpu(&cpu);
+    cpu::add(&cpu);
 
-    cpu.type = CPU_COP421;
+    cpu.type = cpu::type::COP421;
     cpu.hz   = THAYERS_CPU_HZ / 2 / 32; // the cop clock is divided by 2
                                         // externally and 32 internally
     cpu.nmi_period        = 0;
     cpu.must_copy_context = false;
     cpu.mem = coprom;
-    add_cpu(&cpu);
+    cpu::add(&cpu);
 
     m_irq_status = 0x3f;
-    ldv1000_enable_instant_seeking();
+    ldv1000::enable_instant_seeking();
     m_use_speech = true; // Even though not truly emulated, speech synthesis is
                          // the default.
     m_show_speech_subtitle = false; // Flag to toggle on/off subtitled speech
@@ -107,21 +107,21 @@ bool thayers::init()
     // The "-nosound" arg could have been specified, so don't crank up
     // the synthesizer unless audio is enabled. If -notqspeech was present
     // on the command line, m_use_speech will be false.
-    if (is_sound_enabled()) {
-        result = ssi263_init(m_use_speech);
+    if (sound::is_enabled()) {
+        result = ssi263::init(m_use_speech);
     } else {
         // The -nosound option must have been present.
-        result                 = ssi263_init(false);
+        result                 = ssi263::init(false);
         m_use_speech           = false;
         m_show_speech_subtitle = true;
     }
 
     // if sound initialization succeeded
     if (result) {
-        cpu_init();
+        cpu::init();
 
         IScoreboard *pScoreboard =
-            ScoreboardCollection::GetInstance(m_pLogger, tq_get_active_overlay,
+            ScoreboardCollection::GetInstance(tq_get_active_overlay,
                                               true,  // we are thayers quest
                                               false, // not using annunciator,
                                                      // that's just for Space
@@ -191,7 +191,7 @@ void thayers::shutdown()
     if (m_pScoreboard) {
         m_pScoreboard->PreDeleteInstance();
     }
-    cpu_shutdown();
+    cpu::shutdown();
 }
 
 // TQ supports multiple rom revs
@@ -237,7 +237,7 @@ void thayers::do_irq(unsigned int which)
 {
     // if this function is called, it means it's time for another simulated
     // vsync
-    ldv1000_report_vsync();
+    ldv1000::report_vsync();
 }
 
 // does anything special needed to send an IRQ
@@ -248,7 +248,7 @@ void thayers::do_nmi()
 {
     if (m_game_uses_video_overlay) {
         // check to see if the overlay needs to be redrawn
-        video_blit();
+        blit();
     } else {
         // else check to see if the scoreboard needs to be updated
         m_pScoreboard->RepaintIfNeeded();
@@ -309,7 +309,7 @@ Uint8 thayers::port_read(Uint16 port)
     //	case 0xe0:	// Doesn't really exist... not in schematics
     //		break;
     case 0xf0: // Read Data from LD-V1000
-        result = read_ldv1000();
+        result = ldv1000::read();
         break;
     case 0xf1: // DIP Switch B, Coin Slots, READY Status
                // Bits 0-3 Switch B.
@@ -322,12 +322,12 @@ Uint8 thayers::port_read(Uint16 port)
                                   // indicate that they are not active
 
         // if status strobe is active ..
-        if (ldv1000_is_status_strobe_active()) {
+        if (ldv1000::is_status_strobe_active()) {
             result &= 0xBF; // enable status strobe (clear bit 6)
         }
 
         // if command strobe is active ..
-        else if (ldv1000_is_command_strobe_active()) {
+        else if (ldv1000::is_command_strobe_active()) {
             result &= 0x7F; // enable command strobe (clear bit 7)
         }
         break;
@@ -357,21 +357,21 @@ void thayers::port_write(Uint16 port, Uint8 value)
     case 0x00: // Ports 00-04 output to speech chip
         // As far as I can tell, it's reg0 of the SSI-263 that issues an IRQ.
         // So always check on return if an IRQ needs to be raised.
-        ssi263_reg0(value, &m_irq_status);
+        ssi263::reg0(value, &m_irq_status);
 
         if (!(m_irq_status & 0x04)) thayers_irq();
         break;
     case 0x01:
-        ssi263_reg1(value);
+        ssi263::reg1(value);
         break;
     case 0x02:
-        ssi263_reg2(value);
+        ssi263::reg2(value);
         break;
     case 0x03:
-        ssi263_reg3(value);
+        ssi263::reg3(value);
         break;
     case 0x04:
-        ssi263_reg4(value);
+        ssi263::reg4(value);
         break;
     case 0x20: // Bits 5-7 write to COP421 ports G0-G2, Bit 2 /BANKSELT
         if (value == 0x20) cop_write_latch = 0xfa;
@@ -396,7 +396,7 @@ void thayers::port_write(Uint16 port, Uint8 value)
         //		printline("Got self INT");
         break;
     case 0xf4: // Write data to LD-V1000
-        write_ldv1000(value);
+        ldv1000::write(value);
         //		sprintf(s, "THAYERS: Write to LD-V1000: %x", value);
         //		printline(s);
         break;
@@ -500,11 +500,11 @@ void thayers::palette_calculate()
         temp_color.g = (unsigned char)i;
         temp_color.b = (unsigned char)i;
 
-        palette_set_color(i, temp_color);
+        palette::set_color(i, temp_color);
     }
 }
 
-void thayers::video_repaint()
+void thayers::repaint()
 {
     // if m_game_uses_video_overlay is false, then m_video_overlay_width will be
     // 0, which means
@@ -529,8 +529,8 @@ void thayers::video_repaint()
             if (g_ldp->lock_overlay(1000)) {
                 m_video_overlay_width  = cur_w;
                 m_video_overlay_height = cur_h;
-                video_shutdown();
-                if (!video_init()) set_quitflag(); // safety check
+                shutdown_video();
+                if (!init_video()) set_quitflag(); // safety check
                 g_ldp->unlock_overlay(1000);       // unblock game video overlay
             }
 
@@ -544,7 +544,7 @@ void thayers::video_repaint()
 
     // An 'issues' screen can pop-up before m_pScoreboard has been instantiated.
     if (m_pScoreboard) {
-        // by definition, video_repaint must force a repaint, hence why we call
+        // by definition, repaint must force a repaint, hence why we call
         // invalidate first
         m_pScoreboard->Invalidate();
         m_pScoreboard->RepaintIfNeeded();
@@ -581,7 +581,7 @@ void thayers::process_keydown(SDL_Keycode key)
     else
         switch (key) {
         case SDLK_ESCAPE:
-            // escape quits daphne =]
+            // escape quits hypseus =]
             set_quitflag();
             break;
 
@@ -639,19 +639,19 @@ void thayers::process_keydown(SDL_Keycode key)
             break;
 
         case SDLK_PAGEUP:
-            if (is_sound_enabled()) {
+            if (sound::is_enabled()) {
                 // speech volume up
-                volume += volume >= AUDIO_MAX_VOLUME ? 0 : 8;
-                set_soundchip_nonvldp_volume(volume);
+                volume += volume >= sound::MAX_VOLUME ? 0 : 8;
+                sound::set_chip_nonvldp_volume(volume);
             }
 
             break;
 
         case SDLK_PAGEDOWN:
-            if (is_sound_enabled()) {
+            if (sound::is_enabled()) {
                 // speech volume down
                 volume -= volume == 0 ? 0 : 8;
-                set_soundchip_nonvldp_volume(volume);
+                sound::set_chip_nonvldp_volume(volume);
             }
 
             break;

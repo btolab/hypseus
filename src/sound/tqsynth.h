@@ -1,4 +1,6 @@
 /*
+ * ____ DAPHNE COPYRIGHT NOTICE ____
+ *
  * tqsynth.h -- A bare-bones phoneme-based voice synthesizer based on
  *              "rsynth" (C) 1994 by Nick Ing-Simmons, which utilized
  *              the Klatt synthesizer (C) 1982 by Dennis H. Klatt.
@@ -28,10 +30,13 @@
  *
  */
 
-#include <SDL.h>
 #include "sound.h" // for sample_s definition
+#include <SDL.h>
 
-void tqsynth_init(int freq, Uint16 format, int channels, long base_F0);
-bool audio_get_chunk(int num_samples, short *samples, sample_s *ptrSample);
-bool tqsynth_phones_to_wave(char *phonemes, int len, sample_s *ptrSample);
-void tqsynth_free_chunk(Uint8 *pu8Buf);
+namespace tqsynth
+{
+void init(int freq, Uint16 format, int channels, long base_F0);
+bool audio_get_chunk(int num_samples, short *samples, sound::sample_s *ptrSample);
+bool phones_to_wave(char *phonemes, int len, sound::sample_s *ptrSample);
+void free_chunk(Uint8 *pu8Buf);
+}

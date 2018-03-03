@@ -1,5 +1,5 @@
 /*
- * benchmark.h
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -29,7 +29,7 @@ class benchmark : public game
     void start();
     void set_preset(int);
     void palette_calculate();
-    void video_repaint();
+    void repaint();
 
   private:
     Uint32 m_seconds_to_run; // how many seconds to run the benchmark

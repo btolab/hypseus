@@ -1,5 +1,5 @@
 /*
- * astron.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001-2005 Mark Broadhead
  *
@@ -40,6 +40,7 @@
 #include "config.h"
 
 #include <string.h>
+#include <plog/Log.h>
 #include "astron.h"
 #include "../io/conout.h"
 #include "../ldp-in/ldv1000.h"
@@ -53,11 +54,11 @@
 
 astron::astron()
 {
-    struct cpudef cpu;
+    struct cpu::def cpu;
 
     m_shortgamename = "astronp";
 
-    memset(&cpu, 0, sizeof(struct cpudef));
+    memset(&cpu, 0, sizeof(struct cpu::def));
     memset(banks, 0xFF, 4);        // fill banks with 0xFF's
     memset(sprite, 0x00, 0x10000); // making sure sprite[] is zero'd out
     memset(used_sprite_color, 0x00, 256);
@@ -71,14 +72,14 @@ astron::astron()
     m_video_overlay_height = ASTRON_OVERLAY_H;
     m_palette_color_count  = ASTRON_COLOR_COUNT;
 
-    cpu.type              = CPU_Z80;
+    cpu.type              = cpu::type::Z80;
     cpu.hz                = 5000000; // the schematics seem to indicate that its 20MHz / 4
     cpu.irq_period[0]     = (1000.0 / 59.94); // interrupt from vblank (60hz)
     cpu.nmi_period        = (1000.0 / 59.94); // nmi from LD-V1000 command strobe
     cpu.initial_pc        = 0;
     cpu.must_copy_context = false;
     cpu.mem = m_cpumem;
-    add_cpu(&cpu); // add a z80
+    cpu::add(&cpu); // add a z80
 
     current_bank        = 0;
     m_transparent_color = 0;
@@ -225,7 +226,7 @@ astronh::astronh()
 {
     m_shortgamename = "astron";
 
-    cpu_change_nmi(0, 2.0); // change the NMI period for cpu #0
+    cpu::change_nmi(0, 2.0); // change the NMI period for cpu #0
     // we'll use this to clock the 8251
     rxrdy = txrdy = false;
 
@@ -347,7 +348,7 @@ void astron::do_irq(unsigned int which_irq)
     if (which_irq == 0) {
         // Redraws the screen (if needed) on interrupt
         recalc_palette();
-        video_blit();
+        blit();
         Z80_ASSERT_IRQ;
     }
 }
@@ -357,8 +358,8 @@ void astron::do_nmi()
 {
     // only do an nmi if nmie is enabled
     if (m_cpumem[0xd801] & 0x40) {
-        write_ldv1000(ldp_output_latch);
-        ldp_input_latch = read_ldv1000();
+        ldv1000::write(ldp_output_latch);
+        ldp_input_latch = ldv1000::read();
         Z80_ASSERT_NMI;
     }
 }
@@ -371,7 +372,7 @@ void astronh::astronh_nmi()
 {
     // only do an nmi if nmie is enabled
     if (m_cpumem[0xd801] & 0x40) {
-        //		printline("doin' the NMI");
+       	LOGD << "doin' the NMI";
 
         //		z80_set_nmi_line(ASSERT_LINE);
         //		z80_execute(1);	// execute a quick instruction
@@ -429,9 +430,7 @@ Uint8 astron::cpu_mem_read(Uint16 addr)
     }
 
     else {
-        //		char s[81] = { 0 };
-        //		sprintf(s, "Unmapped read from %x", addr);
-        //		printline(s);
+        LOGD << "Unmapped read from " << addr;
     }
 
     return result;
@@ -441,18 +440,15 @@ Uint8 astron::cpu_mem_read(Uint16 addr)
 void astron::cpu_mem_write(Uint16 addr, Uint8 value)
 {
     m_cpumem[addr] = value;
-    char s[81]     = {0};
 
     // main rom
     if (addr <= 0x7fff) {
-        sprintf(s, "Attempted write to main ROM! at %x with value %x", addr, value);
-        printline(s);
+        LOGW << fmt("Attempted write to main ROM! at %x with value %x", addr, value);
     }
 
     // bank rom
     else if (addr >= 0x8000 && addr <= 0xbfff) {
-        sprintf(s, "Attempted write to bank ROM! at %x with value %x", addr, value);
-        printline(s);
+        LOGW << fmt("Attempted write to bank ROM! at %x with value %x", addr, value);
     }
 
     // disc
@@ -475,37 +471,37 @@ void astron::cpu_mem_write(Uint16 addr, Uint8 value)
 
         if (m_game_type == GAME_ASTRON) {
             if (((value & 0x0f) == 0x00) && !(value & 0x20)) {
-                sound_play(S_AB_PLAYER_SHIP);
+                sound::play(S_AB_PLAYER_SHIP);
             } else if ((value & 0x0f) == 0xb) {
-                sound_play(S_AB_PLAYER_FIRE);
+                sound::play(S_AB_PLAYER_FIRE);
             } else if ((value & 0x0f) == 0xa) {
-                sound_play(S_AB_ENEMY_FIRE);
+                sound::play(S_AB_ENEMY_FIRE);
             } else if ((value & 0x0f) == 0xf) {
-                sound_play(S_AB_ALARM1);
+                sound::play(S_AB_ALARM1);
             } else if ((value & 0x0f) == 0xe) {
-                sound_play(S_AB_ALARM2);
+                sound::play(S_AB_ALARM2);
             } else if ((value & 0x0f) == 0xd) {
-                sound_play(S_AB_ALARM3);
+                sound::play(S_AB_ALARM3);
             } else if ((value & 0x0f) == 0xc) {
-                sound_play(S_AB_ALARM4);
+                sound::play(S_AB_ALARM4);
             }
         } else if (m_game_type == GAME_GALAXY) {
             if ((value & 0x0f) == 0xb) {
-                sound_play(S_GR_FIRE);
+                sound::play(S_GR_FIRE);
             } else if ((value & 0x0f) == 0x9) {
-                sound_play(S_GR_ENEMY_CANNON);
+                sound::play(S_GR_ENEMY_CANNON);
             } else if ((value & 0x0f) == 0x8) {
-                sound_play(S_GR_ENEMY_MINION);
+                sound::play(S_GR_ENEMY_MINION);
             } else if ((value & 0x0f) == 0xa) {
-                sound_play(S_GR_ENEMY_ATTACK);
+                sound::play(S_GR_ENEMY_ATTACK);
             } else if ((value & 0x0f) == 0xf) {
-                sound_play(S_GR_ALARM1);
+                sound::play(S_GR_ALARM1);
             } else if ((value & 0x0f) == 0xe) {
-                sound_play(S_GR_ALARM2);
+                sound::play(S_GR_ALARM2);
             } else if ((value & 0x0f) == 0xd) {
-                sound_play(S_GR_ALARM3);
+                sound::play(S_GR_ALARM3);
             } else if ((value & 0x0f) == 0xc) {
-                sound_play(S_GR_ALARM4);
+                sound::play(S_GR_ALARM4);
             }
         }
 
@@ -546,20 +542,14 @@ void astron::cpu_mem_write(Uint16 addr, Uint8 value)
 
     else {
         m_cpumem[addr] = value;
-        //			char s[81] = { 0 };
-        //			sprintf(s, "Unmapped write to %x with value %x", addr,
-        //value);
-        //			printline(s);
+        LOGD << fmt("Unmapped write to %x with value %x", addr, value);
     }
 }
 
 Uint8 astron::read_ldp(Uint16 addr)
 {
-    //	char s[81] = {0};
-
     Uint8 result = ldp_input_latch;
-    //		sprintf(s, "Read from player %x at pc: %x", result, Z80_GET_PC);
-    //		printline(s);
+    LOGD << fmt("Read from player %x at pc: %x", result, Z80_GET_PC);
 
     return result;
 }
@@ -576,7 +566,7 @@ Uint8 astronh::read_ldp(Uint16 addr)
         result = read_8251_status();
         break;
     default:
-        printline("ERROR: ASTRONH read_ldp()! check disc address");
+        LOGW << "check disc address";
         break;
     }
 
@@ -585,10 +575,7 @@ Uint8 astronh::read_ldp(Uint16 addr)
 
 void astron::write_ldp(Uint8 value, Uint16 addr)
 {
-    //	char s[81] = {0};
-
-    //	sprintf(s, "Write to player %x at pc %x", value, Z80_GET_PC);
-    //	printline(s);
+    LOGD << fmt("Write to player %x at pc %x", value, Z80_GET_PC);
     ldp_output_latch = value;
 }
 
@@ -602,7 +589,7 @@ void astronh::write_ldp(Uint8 value, Uint16 addr)
         write_8251_control(value);
         break;
     default:
-        printline("ERROR: ASTRONH write_ldp()! check disc address");
+        LOGW << "check disc address";
         break;
     }
 }
@@ -610,22 +597,15 @@ void astronh::write_ldp(Uint8 value, Uint16 addr)
 // reads a byte from the cpu's port
 Uint8 astron::port_read(Uint16 port)
 {
-    char s[81] = {0};
-
     port &= 0xFF;
-    sprintf(s, "ERROR: CPU port %x read requested, but this function is "
-               "unimplemented!",
-            port);
-    printline(s);
-
+    LOGW << fmt("ERROR: CPU port %x read requested, but this function is "
+                "unimplemented!", port);
     return (0);
 }
 
 // writes a byte to the cpu's port
 void astron::port_write(Uint16 port, Uint8 value)
 {
-    char s[81] = {0};
-
     port &= 0xFF;
 
     switch (port & 0xFF) {
@@ -634,10 +614,9 @@ void astron::port_write(Uint16 port, Uint8 value)
         current_bank = value & 0x01;
         break;
     default:
-        sprintf(s, "ERROR: CPU port %x write requested (value %x) but this "
+        LOGW << fmt("ERROR: CPU port %x write requested (value %x) but this "
                    "function is unimplemented!",
                 port, value);
-        printline(s);
         break;
     }
 }
@@ -706,10 +685,8 @@ void astron::palette_calculate()
     // if the total number of colors is under 0xff we can cheat and have them
     // all in one palette
     if ((total_tile_colors + total_sprite_colors) < 0xff) {
-        char s[81] = {0};
-        sprintf(s, "total used colors 0x%x - compressing palette",
-                total_tile_colors + total_sprite_colors);
-        printline(s);
+        LOGD << fmt("total used colors 0x%x - compressing palette",
+                   total_tile_colors + total_sprite_colors);
         compress_palette = true;
 
         // check each tile color and if we need it remap it to a sprite color
@@ -720,25 +697,23 @@ void astron::palette_calculate()
                 }
 
                 mapped_tile_color[x] = y;
-                palette_set_color(y, palette_lookup[((x & 0x07) << 1) | ((x & 0x38) << 2) |
+                palette::set_color(y, palette_lookup[((x & 0x07) << 1) | ((x & 0x38) << 2) |
                                                     ((x & 0xc0) << 4)]);
                 // since color 0 is moved we need to find our new transparent
                 // color
                 if (x == 0) {
-                    palette_set_transparency(m_transparent_color,
+                    palette::set_transparency(m_transparent_color,
                                              false); // make old transparent
                                                      // color non-transparent
                     m_transparent_color = y;
-                    palette_set_transparency(m_transparent_color, true);
+                    palette::set_transparency(m_transparent_color, true);
                 }
                 y++;
             }
         }
     } else {
-        char s[81] = {0};
-        sprintf(s, "total used colors 0x%x - cannot compress palette!",
-                total_tile_colors + total_sprite_colors);
-        printline(s);
+        LOGD << fmt("total used colors 0x%x - cannot compress palette!",
+                   total_tile_colors + total_sprite_colors);
         compress_palette = false;
     }
 }
@@ -756,17 +731,17 @@ void astron::recalc_palette()
 
             // only update the sprite colors if they are used
             if (used_sprite_color[i]) {
-                palette_set_color(i, palette_lookup[m_cpumem[j] | ((m_cpumem[j + 1] & 0x0f) << 8)]);
+                palette::set_color(i, palette_lookup[m_cpumem[j] | ((m_cpumem[j + 1] & 0x0f) << 8)]);
             }
         }
 
-        palette_finalize();
+        palette::finalize();
     }
     palette_modified = false;
 }
 
 // updates astron's video
-void astron::video_repaint()
+void astron::repaint()
 {
     SDL_FillRect(m_video_overlay[m_active_video_overlay], NULL, m_transparent_color);
 
@@ -1041,7 +1016,7 @@ void cobraab::patch_roms()
         m_cpumem[0x865] = 0; // NOP out code that decrements # of remaning lives
         m_cpumem[0x866] = 0;
         m_cpumem[0x867] = 0;
-        printline("Cobraab infinite lives cheat enabled!");
+        LOGI << "Cobraab infinite lives cheat enabled!";
     }
 }
 
@@ -1058,7 +1033,7 @@ bool astron::set_bank(Uint8 which_bank, Uint8 value)
         banks[3] = (Uint8)(value ^ 0xFF); // switches are active low
         break;
     default:
-        printline("ERROR: Bank specified is out of range!");
+        LOGW << "Bank specified is out of range!";
         result = false;
         break;
     }
@@ -1140,20 +1115,16 @@ void astron::draw_sprite(int spr_number)
 // very minimal 8251 implementation, just to get Astron working
 void astronh::write_8251_data(Uint8 data)
 {
-    char s[81] = {0};
-    sprintf(s, "ASTRONH: 8251_write_data() with %x", data);
-    //	printline(s);
+    LOGD << fmt("%x", data);
     // writing to the 8251 resets txrdy
     txrdy = false;
-    write_vip9500sg(data);
+    vip9500sg::write(data);
 }
 
 Uint8 astronh::read_8251_data(void)
 {
-    char s[81]   = {0};
-    Uint8 result = read_vip9500sg();
-    sprintf(s, "ASTRONH: 8251_read_data with %x", result);
-    //	printline(s);
+    Uint8 result = vip9500sg::read();
+    LOGD << fmt("%x", result);
     // reading from the 8251 resets rxrdy
     rxrdy = false;
     return result;
@@ -1161,29 +1132,26 @@ Uint8 astronh::read_8251_data(void)
 
 void astronh::write_8251_control(Uint8 control)
 {
-    char s[81]       = {0};
     static bool init = false;
 
     // initialize chip with first control instruction after reset
     if (!init) {
-        printline("8251 Reset!");
+        LOGD << "8251 Reset!";
         if (control == 0x8f) {
-            printline("8251 mode selected as 1.5 stop bits/parity disabled/8 "
-                      "bit characters/64x baud factor");
+            LOGD << "8251 mode selected as 1.5 stop bits/parity disabled/8 "
+                      "bit characters/64x baud factor";
         } else if (control == 0x4e) {
-            printline("8251 mode selected as 1 stop bit/parity disabled/8 bit "
-                      "characters/16x baud factor");
+            LOGD << "8251 mode selected as 1 stop bit/parity disabled/8 bit "
+                      "characters/16x baud factor";
         } else {
-            sprintf(s,
-                    "8251 attempted to initialize with mode %x - unsupported", control);
-            printline(s);
+            LOGW << fmt("8251 attempted to initialize with mode %x - unsupported", control);
         }
         init = true;
     }
     // otherwise its a command
     else {
         if (control & 0x01) {
-            //	printline("8251: Transmit Enable");
+            LOGD << "Transmit Enable";
             if (!transmit_enable) {
                 // when transmit is enabled it makes txrdy true
                 transmit_enable = true;
@@ -1191,7 +1159,7 @@ void astronh::write_8251_control(Uint8 control)
                 astronh_nmi();
             }
         } else {
-            // printline("8251: Transmit Disable");
+            LOGD << "Transmit Disable";
             transmit_enable = false;
             txrdy           = false;
         }
@@ -1207,44 +1175,44 @@ void astronh::write_8251_control(Uint8 control)
         //}
 
         if (control & 0x04) {
-            //	printline("8251: Recieve Enable");
+            LOGD << "Recieve Enable";
             recieve_enable = true;
         } else {
-            //	printline("8251: Recieve Disable");
+            LOGD << "Recieve Disable";
             recieve_enable = false;
         }
 
         // I don't think ASTRON uses the Break Character... we'll see
         if (control & 0x08) {
-            printline("8251: Sent Break Character!");
+            LOGD << "Sent Break Character!";
         } else {
-            // printline("8251: Break Character Normal Operation");
+            LOGD << "Break Character Normal Operation";
         }
 
         // I haven't seen astron reset the error flag yet
         if (control & 0x10) {
-            printline("8251: Reset Error Flag!");
+            LOGD << "Reset Error Flag!";
         } else {
-            //			printline("8251: Error Flag Normal Operation");
+            LOGD << "Error Flag Normal Operation";
         }
 
         // not sure what this does
         if (control & 0x20) {
-            //			printline("8251: RTS = 0");
+            LOGD << "RTS = 0";
         } else {
-            printline("8251: RTS = 1");
+            LOGD << "RTS = 1";
         }
 
         if (control & 0x40) {
-            printline("8251: Internal Reset");
+            LOGD << "Internal Reset";
             init = false;
         } else {
-            //	printline("8251: Reset Normal Operation");
+            LOGD << "Reset Normal Operation";
         }
 
         // Hunt mode should only be enabled in Sync mode
         if (control & 0x80) {
-            printline("8251 ERROR: Hunt Mode!");
+            LOGW << "Hunt Mode!";
         } else {
         }
     }
@@ -1264,7 +1232,7 @@ void astronh::clock_8251(void)
     // periodically check the status of the 8251
 
     // if we have data ready from the player inform the 8251
-    if ((vip9500sg_result_ready()) && (!rxrdy) && (recieve_enable)) {
+    if ((vip9500sg::result_ready()) && (!rxrdy) && (recieve_enable)) {
         rxrdy = true;
         astronh_nmi();
     }

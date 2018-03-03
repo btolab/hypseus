@@ -1,5 +1,5 @@
 /*
- * seektest.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -31,7 +31,7 @@
 #include "../io/conout.h"
 #include "../ldp-out/ldp.h"
 #include "seektest.h"
-#include "../daphne.h" // for get_quitflag
+#include "../hypseus.h" // for get_quitflag
 #include "../io/input.h"
 #include "../video/palette.h"
 #include "../video/video.h"
@@ -77,7 +77,7 @@ void seektest::start()
     if (!m_multimpeg) {
         while (!get_quitflag()) {
             m_video_overlay_needs_update = true;
-            video_blit();
+            blit();
             SDL_check_input();
             g_ldp->think_delay(10); // don't hog cpu, and advance timer
         }
@@ -100,7 +100,7 @@ void seektest::start()
             // see that it is in sync
             while ((elapsed_ms_time(timer) < 2000) && !get_quitflag()) {
                 m_video_overlay_needs_update = true;
-                video_blit();
+                blit();
                 SDL_check_input();
                 g_ldp->think_delay(10); // don't hog CPU
             }
@@ -475,12 +475,12 @@ void seektest::palette_calculate()
         temp_color.r = (unsigned char)i;
         temp_color.g = (unsigned char)i;
         temp_color.b = (unsigned char)i;
-        palette_set_color(i, temp_color);
+        palette::set_color(i, temp_color);
     }
 }
 
 // redraws video
-void seektest::video_repaint()
+void seektest::repaint()
 {
     Uint32 cur_w = g_ldp->get_discvideo_width() >> 1; // width overlay should be
     Uint32 cur_h = g_ldp->get_discvideo_height() >> 1; // height overlay should
@@ -496,8 +496,8 @@ void seektest::video_repaint()
         if (g_ldp->lock_overlay(1000)) {
             m_video_overlay_width  = cur_w;
             m_video_overlay_height = cur_h;
-            video_shutdown();
-            if (!video_init()) {
+            shutdown_video();
+            if (!init_video()) {
                 printline(
                     "Fatal Error, trying to re-create the surface failed!");
                 set_quitflag();

@@ -1,5 +1,5 @@
 /*
- * ffr.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -29,8 +29,9 @@
 
 #include "config.h"
 
+#include <plog/Log.h>
 #include "ffr.h"
-#include "../daphne.h" // for get_quitflag
+#include "../hypseus.h" // for get_quitflag
 #include "../ldp-out/ldp.h"
 #include "../timer/timer.h"
 #include "../io/conout.h"
@@ -161,8 +162,7 @@ void ffr::start()
 
             // safety check ...
             if (g_ldp->get_current_frame() != m_pClips[index].end) {
-                printline("FFR FAILED! Current frame was past where it "
-                          "should've been!");
+                LOGW << "Current frame was past where it should've been!";
                 finished = true;
                 break;
             }

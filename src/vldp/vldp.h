@@ -1,5 +1,5 @@
 /*
- * vldp.h
+ * ____ VLDP COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -34,14 +34,12 @@ extern "C" {
 // Ubuntu Linux complains with plain <SDL.h>
 #include <SDL.h> // only used for threading
 
-#include <mpeg2.h>
-
 struct yuv_buf {
-    unsigned char *Y;     // Y channel
-    unsigned char *U;     // U channel
-    unsigned char *V;     // V channel
-    unsigned int Y_size;  // size in bytes of Y
-    unsigned int UV_size; // size in bytes of U and V
+    uint8_t *Y;     // Y channel
+    uint8_t *U;     // U channel
+    uint8_t *V;     // V channel
+    int Y_size;     // size in bytes of Y
+    int UV_size;    // size in bytes of U and V
 };
 
 // safe strcpy that null-terminates the end of a string
@@ -64,7 +62,7 @@ struct vldp_in_info {
     // VLDP to sleep
     // until it's time for the frame to be displayed.
     // This returns 1 if the frame was prepared successfully, or 0 on error
-    int (*prepare_frame)(const mpeg2_info_t *info);
+    int (*prepare_frame)(uint8_t *Yplane, uint8_t *Uplane, uint8_t *Vplane, int Ypitch, int Upitch, int Vpitch);
 
     // VLDP calls this when it wants the frame that was earlier prepared to be
     // displayed
@@ -187,8 +185,6 @@ struct vldp_out_info {
     ////////////////////////////////////////////////////////////
 
     // State information for the parent thread's benefit
-    unsigned int uApiVersion; // so parent thread knows if it's compatible with
-                              // this version of VLDP
     unsigned int uFpks; // FPKS = frames per kilosecond (FPS = uFpks / 1000.0)
     unsigned int u2milDivFpks; // (2000000) / uFpks (pre-calculated, used to
                                // determine whether to drop frames)
@@ -200,6 +196,7 @@ struct vldp_out_info {
                                 // are on
     unsigned int uLastCachedIndex; // the index of the file that was last
                                    // precached (if any)
+
 };
 
 enum { STAT_ERROR, STAT_BUSY, STAT_STOPPED, STAT_PLAYING, STAT_PAUSED };

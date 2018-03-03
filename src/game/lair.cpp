@@ -1,5 +1,5 @@
 /*
-* lair.cpp
+* ____ DAPHNE COPYRIGHT NOTICE ____
 *
 * Copyright (C) 2001 Matt Ownby
 *
@@ -27,10 +27,6 @@
 
 #include "config.h"
 
-#ifdef _MSC_VER
-#pragma warning(disable : 4100) // disable warning about unreferenced parameter
-#endif
-
 // Win32 doesn't use strcasecmp, it uses stricmp (lame)
 #ifdef WIN32
 #define strcasecmp stricmp
@@ -39,6 +35,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <plog/Log.h>
 #include "lair.h"
 #include "../ldp-in/ldv1000.h"
 #include "../ldp-in/pr7820.h"
@@ -58,7 +55,7 @@
 lair::lair() : m_bUseAnnunciator(false), m_pScoreboard(NULL)
 {
     m_shortgamename = "lair";
-    memset(m_cpumem, 0, CPU_MEM_SIZE);
+    memset(m_cpumem, 0, cpu::MEM_SIZE);
     m_switchA      = 0x22;
     m_switchB      = 0xD8;
     m_joyskill_val = 0xFF; // all input cleared
@@ -68,9 +65,9 @@ lair::lair() : m_bUseAnnunciator(false), m_pScoreboard(NULL)
     // Scoreboard starts off being visible
     m_bScoreboardVisibility = true;
 
-    struct cpudef cpu;
-    memset(&cpu, 0, sizeof(struct cpudef));
-    cpu.type          = CPU_Z80;
+    struct cpu::def cpu;
+    memset(&cpu, 0, sizeof(struct cpu::def));
+    cpu.type          = cpu::type::Z80;
     cpu.hz            = LAIR_CPU_HZ;
     cpu.irq_period[0] = LAIR_IRQ_PERIOD;
     cpu.nmi_period    = (1000.0 / 60.0); // dragon's lair has no NMI.  We use this
@@ -79,14 +76,14 @@ lair::lair() : m_bUseAnnunciator(false), m_pScoreboard(NULL)
     cpu.initial_pc        = 0;
     cpu.must_copy_context = false;
     cpu.mem = m_cpumem;
-    add_cpu(&cpu); // add this cpu to the list (it will be our only one)
+    cpu::add(&cpu); // add this cpu to the list (it will be our only one)
 
-    struct sounddef soundchip;
-    soundchip.type = SOUNDCHIP_AY_3_8910; // Dragon's Lair hardware uses the
+    struct sound::chip soundchip;
+    soundchip.type = sound::CHIP_AY_3_8910; // Dragon's Lair hardware uses the
                                           // ay-3-8910
     soundchip.hz = LAIR_CPU_HZ / 2; // DL halves the CPU clock for the sound
                                     // chip
-    m_soundchip_id = add_soundchip(&soundchip);
+    m_soundchip_id = sound::add_chip(&soundchip);
 
     m_disc_fps  = 23.976;
     m_game_type = GAME_LAIR;
@@ -95,7 +92,7 @@ lair::lair() : m_bUseAnnunciator(false), m_pScoreboard(NULL)
                                        // video overlay
     m_video_overlay_needs_update = false;
 
-    ldv1000_enable_instant_seeking(); // make the LD-V1000 perform instantaneous
+    ldv1000::enable_instant_seeking(); // make the LD-V1000 perform instantaneous
                                       // seeks because we can
     m_status_strobe_timer = 0;
     m_uses_pr7820         = false; // only used by lairalt()
@@ -190,11 +187,11 @@ void dle11::patch_roms()
 
     passed_test = verify_required_file("readme11.txt", "dle11", 0x4BF84551);
 
-    // if they failed the test then exit daphne
+    // if they failed the test then exit hypseus
     if (!passed_test) {
-        printerror("DLE readme11.txt file is missing or altered.");
-        printerror("Please get the original readme11.txt file from "
-                   "www.d-l-p.com, thanks.");
+        LOGI << "DLE readme11.txt file is missing or altered.";
+        LOGI << "Please get the original readme11.txt file from "
+                     "www.d-l-p.com, thanks.";
         set_quitflag();
     }
 
@@ -242,7 +239,7 @@ void dle2::set_version(int version)
 
         m_rom_list = roms;
     } else {
-        printline("LAIR 2.x:  Unsupported -version paramter, ignoring...");
+        LOGW << "Unsupported -version paramter, ignoring...";
     }
 }
 
@@ -253,16 +250,16 @@ void dle2::patch_roms()
 
     if (strcasecmp(m_shortgamename, "dle20") == 0) {
         if (!(passed_test = verify_required_file("readme20.txt", "dle20", 0x51C50010))) {
-            printerror("DLE readme20.txt file is missing or altered.");
-            printerror("Please get the original file from "
-                       "http://www.d-l-p.com.  Thanks.");
+            LOGI << "DLE readme20.txt file is missing or altered.";
+            LOGI << "Please get the original file from "
+                         "http://www.d-l-p.com.  Thanks.";
             set_quitflag();
         }
     } else {
         if (!(passed_test = verify_required_file("readme21.txt", "dle21", 0xA68F0D21))) {
-            printerror("DLE readme21.txt file is missing or altered.");
-            printerror("Please get the original file from "
-                       "http://www.d-l-p.com.  Thanks.");
+            LOGI << "DLE readme21.txt file is missing or altered.";
+            LOGI << "Please get the original file from "
+                         "http://www.d-l-p.com.  Thanks.";
             set_quitflag();
         }
     }
@@ -317,7 +314,7 @@ void ace::set_version(int version)
              {NULL}};
         m_rom_list = ace_roms;
     } else {
-        printline("ACE:  Unsupported -version paramter, ignoring...");
+        LOGW << "Unsupported -version paramter, ignoring...";
     }
 }
 
@@ -360,10 +357,10 @@ void sae::patch_roms()
 
     passed_test = verify_required_file("readme.txt", "sae", 0xCA4E20E6);
 
-    // if they failed the test then exit daphne
+    // if they failed the test then exit hypseus
     if (!passed_test) {
-        printerror("The SAE readme.txt file is missing or altered.");
-        printerror("Please get the original file from www.d-l-p.com, thanks.");
+        LOGI << "The SAE readme.txt file is missing or altered.";
+        LOGI << "Please get the original file from www.d-l-p.com, thanks.";
         set_quitflag();
     }
 }
@@ -464,8 +461,8 @@ void lairalt::set_version(int version)
 // lairalt old revs don't use the LDV1000, so there are no strobe -presets
 void lairalt::set_preset(int preset)
 {
-    printline("NOTE: lairalt has no presets defined.  The -preset option will "
-              "be ignored.");
+    LOGI << "lairalt has no presets defined.  The -preset option will "
+                 "be ignored.";
 }
 
 ///////////////////////////////////////////////////////////
@@ -483,7 +480,7 @@ void lair::do_irq(unsigned int which_irq)
 void lair::do_nmi()
 {
     if (!m_uses_pr7820) {
-        m_status_strobe_timer = get_total_cycles_executed(0);
+        m_status_strobe_timer = cpu::get_total_cycles_executed(0);
     }
 
     // If the game does not use a video overlay
@@ -493,7 +490,7 @@ void lair::do_nmi()
 
     // else if we are using a video overlay
     else {
-        video_blit();
+        blit();
     }
 }
 
@@ -523,21 +520,21 @@ void lair::cpu_mem_write(Uint16 Addr, Uint8 Value)
                         // only the 'accept' sound data has a D5 as the second
                         // byte
                         if (m_cpumem[index + 1] == 0xD5) {
-                            sound_play(S_DL_ACCEPT);
+                            sound::play(S_DL_ACCEPT);
                         }
                         // only the 'credit' sound data has a 0x66 as the second
                         // byte
                         else if (m_cpumem[index + 1] == 0x66) {
-                            sound_play(S_DL_CREDIT);
+                            sound::play(S_DL_CREDIT);
                         }
                         // only the 'buzz' sound data has a 0x99 as its third
                         // byte
                         else if (m_cpumem[index + 1] == 0x99) {
-                            sound_play(S_DL_BUZZ);
+                            sound::play(S_DL_BUZZ);
                         }
                         // else unknown sound, play an error
                         else {
-                            printline("WARNING : Unknown dragon's lair sound!");
+                            LOGW << "Unknown dragon's lair sound!";
                         }
                     }
                 }
@@ -553,7 +550,7 @@ void lair::cpu_mem_write(Uint16 Addr, Uint8 Value)
             // real sound chip data is sent here
             case 0xE000:
                 if (!m_prefer_samples)
-                    audio_write_ctrl_data(m_soundchip_address_latch, Value, m_soundchip_id);
+                    sound::write_ctrl_data(m_soundchip_address_latch, Value, m_soundchip_id);
                 break;
 
             // I believe this controlled whether the bus was in input or output
@@ -583,9 +580,9 @@ void lair::cpu_mem_write(Uint16 Addr, Uint8 Value)
             // laserdisc control
             case 0xE020:
                 if (m_uses_pr7820) {
-                    write_pr7820(Value);
+                    pr7820::write(Value);
                 } else {
-                    write_ldv1000(Value);
+                    ldv1000::write(Value);
                 }
                 break;
 
@@ -658,10 +655,8 @@ void lair::cpu_mem_write(Uint16 Addr, Uint8 Value)
                 }
                 break;
             default: {
-                char s[160] = {0};
-                sprintf(s, "Unknown hardware output at %x, value of %x, PC %x",
+                LOGW << fmt("Unknown hardware output at %x, value of %x, PC %x",
                         Addr, Value, Z80_GET_PC);
-                printline(s);
             } break;
             } // end switch
 
@@ -674,9 +669,7 @@ void lair::cpu_mem_write(Uint16 Addr, Uint8 Value)
     // if we are trying to write below 0xA000, it means we are trying to write
     // to ROM
     else {
-        char s[160];
-        sprintf(s, "Error, program attempting to write to ROM (%x), PC is %x", Addr, Z80_GET_PC);
-        printline(s);
+        LOGW << fmt("Error, program attempting to write to ROM (%x), PC is %x", Addr, Z80_GET_PC);
     }
 }
 
@@ -703,7 +696,7 @@ Uint8 lair::cpu_mem_read(Uint16 Addr)
             result = read_C010();
             break;
         case 0xC020:
-            result = read_ldv1000();
+            result = ldv1000::read();
             break;
         default:
             result = m_cpumem[Addr];
@@ -724,10 +717,10 @@ bool lair::init()
 {
     bool bResult = true;
 
-    cpu_init();
+    cpu::init();
 
     IScoreboard *pScoreboard =
-        ScoreboardCollection::GetInstance(m_pLogger, lair_get_active_overlay,
+        ScoreboardCollection::GetInstance(lair_get_active_overlay,
                                           false, // we aren't thayer's quest
                                           m_bUseAnnunciator, get_scoreboard_port());
 
@@ -791,7 +784,7 @@ void lair::palette_calculate()
         temp_color.g = (unsigned char)i;
         temp_color.b = (unsigned char)i;
 
-        palette_set_color(i, temp_color);
+        palette::set_color(i, temp_color);
     }
 }
 
@@ -804,11 +797,11 @@ void lair::shutdown()
         m_pScoreboard->PreDeleteInstance();
     }
 
-    cpu_shutdown();
+    cpu::shutdown();
 }
 
 // redraws the scoreboard on the screen
-void lair::video_repaint()
+void lair::repaint()
 {
     // if there is an overlay (for overlay scoreboard)
     if (m_video_overlay[m_active_video_overlay]) {
@@ -816,8 +809,6 @@ void lair::video_repaint()
                                                            // should be
         Uint32 cur_h = g_ldp->get_discvideo_height() >> 1; // height overlay
                                                            // should be
-        char s[128] = {0};
-
         // if the width or height of the mpeg video has changed since we last
         // were here (ie, opening a new mpeg)
         // then reallocate the video overlay buffer
@@ -826,25 +817,21 @@ void lair::video_repaint()
                 m_video_overlay_width  = cur_w;
                 m_video_overlay_height = cur_h;
 
-                sprintf(s, "%s : Re-allocated overlay surface (%d x %d)...",
+                LOGD << fmt("%s : Re-allocated overlay surface (%d x %d)...",
                         m_shortgamename, m_video_overlay_width, m_video_overlay_height);
 
-                printline(s);
+                shutdown_video();
 
-                video_shutdown();
-
-                if (!video_init()) {
-                    printline(
-                        "Fatal Error trying to re-allocate overlay surface!");
+                if (!init_video()) {
+                    LOGW <<
+                        "Fatal Error trying to re-allocate overlay surface!";
                     set_quitflag();
                 }
 
                 g_ldp->unlock_overlay(1000); // unblock game video overlay
             } else {
-                sprintf(s, "%s : Timed out trying to get a lock on the yuv "
-                           "overlay",
-                        m_shortgamename);
-                printline(s);
+                LOGW << fmt("%s : Timed out trying to get a lock on the yuv "
+                           "overlay", m_shortgamename);
             }
         } // end if dimensions are incorrect
     }
@@ -860,12 +847,12 @@ void lair::video_repaint()
 void lair::set_preset(int preset)
 {
     if (preset == 1) {
-        printline("LD-V1000 strobes enabled!");
+        LOGD << "LD-V1000 strobes enabled!";
     } else if (preset == 2) {
-        printline("WARNING: You've requested that the LD-V1000 strobes be "
-                  "disabled, but this option has been removed!");
-        printline("(instant strobes were incompatible with seek delay, and not "
-                  "accurate emulation anyway)");
+        LOGW << "WARNING: You've requested that the LD-V1000 strobes be "
+                  "disabled, but this option has been removed!"
+                  "(instant strobes were incompatible with seek delay, and not "
+                  "accurate emulation anyway)";
     }
 }
 
@@ -883,7 +870,7 @@ bool lair::set_bank(unsigned char which_bank, unsigned char value)
         m_switchB = (unsigned char)(value ^ 0xFF); // switches are active low
         break;
     default:
-        printline("ERROR: Bank specified is out of range!");
+        LOGW << "Bank specified is out of range!";
         result = false;
         break;
     }
@@ -931,7 +918,7 @@ Uint8 lair::read_C010()
         // (if the game CPU is halted during searches, then this will never be
         //  set high anyway.  Maybe in the future...)
 
-        if (read_pr7820_ready()) {
+        if (pr7820::read_ready()) {
             m_misc_val |= 0x80;
         } else {
             m_misc_val &= ~0x80;
@@ -998,7 +985,7 @@ void lair::input_enable(Uint8 move)
     default:
         // unused key, take no action
 
-        // printline("Error, bug in Dragon's Lair's input enable");
+        LOGW << "Error, bug in Dragon's Lair's input enable";
         break;
     }
 }
@@ -1046,7 +1033,7 @@ void lair::input_disable(Uint8 move)
     default:
         // unused key, take no action
 
-        // printline("Error, bug in Dragon's Lair's move disable");
+        LOGW << "Error, bug in Dragon's Lair's move disable";
         break;
     }
 }
@@ -1054,7 +1041,7 @@ void lair::input_disable(Uint8 move)
 void lair::OnVblank()
 {
     // in order to make OnLDV1000LineChange work
-    ldv1000_report_vsync();
+    ldv1000::report_vsync();
 }
 
 void lair::OnLDV1000LineChange(bool bIsStatus, bool bIsEnabled)

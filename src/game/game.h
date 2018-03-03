@@ -1,5 +1,5 @@
 /*
- * game.h
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -72,9 +72,8 @@ enum {
 
 #include <SDL.h>
 #include "../sound/sound.h"
-#include "../cpu/cpu.h"  // for CPU_MEM_SIZE
+#include "../cpu/cpu.h"  // for cpu::MEM_SIZE
 #include "../io/input.h" // for SWITCH definitions, most/all games need them
-#include "../io/logger.h"
 
 typedef void *unzFile; // because including the unzip header file gives some
                        // compiler error
@@ -110,7 +109,7 @@ class game
     void pre_shutdown();
 
     // saves this game's static ram to a compressed file
-    // (can be called to ensure sram is saved even if Daphne is terminated
+    // (can be called to ensure sram is saved even if Hypseus is terminated
     // improperly)
     void save_sram();
 
@@ -146,29 +145,29 @@ class game
     // m_palette_color_count, m_video_overlay_width, and m_video_overlay_height
     // should all be initialized before this function is called
     // This function called palette_initialize
-    bool video_init();
+    bool init_video();
 
     // generic function to shutdown video
     // This function calls palette_shutdown
-    void video_shutdown();
+    void shutdown_video();
 
     // generic function to ensure that the video buffer gets drawn to the
-    // screen, will call video_repaint()
+    // screen, will call repaint()
     // this will not do anything if m_video_overlay_needs_update is false
-    void video_blit();
+    void blit();
 
     // forces the screen to always be redrawn (useful if you know the screen has
     // been clobbered, such as when using the drop-down console)
-    void video_force_blit();
+    void force_blit();
 
     // game-specific function that calculates and sets the game's color palette
-    // This function is called by video_init
+    // This function is called by init_video
     virtual void palette_calculate();
 
     // game-specific function to force the video buffer to be drawn from scratch
     // (does not blit),
     // this function is called by video_blit
-    virtual void video_repaint();
+    virtual void repaint();
 
     // a way for external functions to indicate that video needs update
     // (currently the tms9128nl routines need to use this because they aren't
@@ -234,6 +233,8 @@ class game
     void set_issues(const char *);
     void toggle_game_pause(); // toggles whether the game is paused or not
     const char *get_shortgamename(); // returns short game name
+    void set_sdl_software_rendering(); // turns off hardware acceleration
+
 #ifdef CPU_DEBUG
     const char *get_address_name(unsigned int addr); // get a potential name for
                                                      // a memory address (very
@@ -242,6 +243,13 @@ class game
 
     // returns m_bMouseEnabled
     bool getMouseEnabled();
+    
+    bool getGameNeedsOverlayUpdate();
+    
+    void setGameNeedsOverlayUpdate(bool);
+
+    // some platforms have problems with SDL acceleration.
+    bool m_sdl_software_rendering;
 
   protected:
     bool m_game_paused;          // whether the game is paused or not
@@ -249,8 +257,8 @@ class game
                                  // "ace" "dle", etc)
     const struct rom_def *m_rom_list; // pointer to a null-terminated array of
                                       // roms to be loaded
-    Uint8 m_cpumem[CPU_MEM_SIZE]; // generic buffer that most 16-bit addressing
-                                  // cpu's can use
+    Uint8 m_cpumem[cpu::MEM_SIZE]; // generic buffer that most 16-bit addressing
+                                   // cpu's can use
     unsigned int m_uDiscFPKS; // frames per kilosecond of the game's laserdisc
                               // (to avoid using gp2x-unfriendly float)
     double m_disc_fps; // frames per second of the game's laserdisc; (only used
@@ -259,7 +267,7 @@ class game
     //laserdisc (same value as fps, just re-arranged)
     Uint8 m_game_type;   // which game it is
     Uint32 m_num_sounds; // how many samples the game has to load
-    const char *m_sound_name[MAX_NUM_SOUNDS]; // names for each sound file
+    const char *m_sound_name[sound::MAX_NUM]; // names for each sound file
     const char *m_game_issues; // description of any issues the game has (NULL
                                // if no issues)
     bool m_cheat_requested;    // whether user has requested any cheats to be
@@ -296,9 +304,9 @@ class game
                                   // the game graphics to the target screen
                                   // dimension
     Uint32 m_video_screen_width;  // the width  of the target screen (according
-                                  // to the graphic mode set by Daphne)
+                                  // to the graphic mode set by Hypseus)
     Uint32 m_video_screen_height; // the height of the target screen (according
-                                  // to the graphic mode set by Daphne)
+                                  // to the graphic mode set by Hypseus)
     Uint32 m_video_screen_size; // m_video_screen_width x m_video_screen_height,
                                 // just to speedup things a bit
     bool m_bFullScale;          // whether fullscale is enabled or not
@@ -334,7 +342,7 @@ class game
     // the video overlay buffer if nothing is being changed.  Thus,
     // m_video_overlay_needs_update's purpose.
     // The game is responsible for setting this value to true when it knows that
-    // the video_repaint needs to be called
+    // the repaint needs to be called
 
     // how many lines are visible in the video overlay
     // (usually 240 for almost all games, that is, half the resolution of the
@@ -345,9 +353,6 @@ class game
     // if the game uses the mouse, this should be set to true IN THE GAME'S
     // CONSTRUCTOR
     bool m_bMouseEnabled;
-
-    // logger interface (for writing to daphne_log.txt file)
-    ILogger *m_pLogger;
 
 #ifdef CPU_DEBUG
     struct addr_name *addr_names;

@@ -1,5 +1,5 @@
 /*
- * error.cpp
+ * ____ DAPHNE COPYRIGHT NOTICE ____
  *
  * Copyright (C) 2001 Matt Ownby
  *
@@ -21,7 +21,7 @@
  */
 
 // error.cpp
-// daphne error handling
+// hypseus error handling
 
 #include "config.h"
 
@@ -31,19 +31,17 @@
 
 #include <SDL.h>
 #include <string.h>
-#include "../daphne.h"
+#include <plog/Log.h>
+#include "../hypseus.h"
 #include "conout.h"
 #include "input.h"
 #include "../game/game.h"
 #include "../sound/sound.h"
 #include "../video/video.h"
 
-// const char *instr = "Please read the daphne_log.txt file for more
+// const char *instr = "Please read the hypseus_log.txt file for more
 // information";
-const char *instr = "Read daphne_log.txt for help";
-
-const char CRLF[3] = {13, 10, 0}; // carriage return / linefeed combo, for the
-                                  // addlog statements in this file
+const char *instr = "Read hypseus_log.txt for help";
 
 // notifies the user of an error that has occurred
 void printerror(const char *s)
@@ -51,13 +49,10 @@ void printerror(const char *s)
     //	SDL_Rect region = { 0, 180, get_video_width(),
     //(Uint16)(get_video_height() >> 1) };
 
-    addlog(s);
-    addlog(CRLF);
-
 #ifdef WIN32
-    MessageBox(NULL, s, "DAPHNE encountered an error", MB_OK | MB_ICONERROR);
+    MessageBox(NULL, s, "Encountered an error", MB_OK | MB_ICONERROR);
 #else
-    printf("%s\n", s);
+    LOGE << s;
 #endif
 }
 
@@ -65,11 +60,11 @@ void printerror(const char *s)
 // this should be called after video has successfully been initialized
 void printnowookin(const char *s)
 {
-    printf("%s\n", s);
+    LOGE << s;
 }
 
 // prints a notice to the screen
 void printnotice(const char *s)
 {
-    printf("%s\n", s);
+    LOGE << s;
 }
